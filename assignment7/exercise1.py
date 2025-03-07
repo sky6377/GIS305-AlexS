@@ -1,5 +1,5 @@
 import arcpy
-arcpy.env.workspace = r"C:\Users\David Neufeld\Documents\ArcGIS\GIS305\Data\Admin\AdminData.gdb"
+arcpy.env.workspace = r"C:\Users\as425\Documents\GIS Programming\Admin\Admin\AdminData.gdb"
 arcpy.env.overwriteOutput = True
 arcpy.SelectLayerByAttribute_management("cities", "CLEAR_SELECTION")
 
