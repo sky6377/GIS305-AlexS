@@ -1,5 +1,5 @@
-remote_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTaJ_1xRhGQAOSITkgn_C1wfPSnPX0BA37XuftlXVfVrpjfj4J3BHPu1soGeUtNt3XjLI1G_HT2Fy69/pub?output=csv"
-proj_dir: "C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb"
-data_format: "GSheet"
-geocoder_prefix_url: "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address="
-geocoder_suffix_url: "&benchmark=2020&format=json"
+remote_url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTDjitOlmILea7koCORJkq6QrUcwBJM7K3vy4guXB0mU_nWR6wsPn136bpH6ykoUxyYMW7wTwkzE37l/pub?output=csv'
+proj_dir: 'C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb'
+data_format: 'GSheet'
+geocoder_prefix_url: 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address='
+geocoder_suffix_url: '&benchmark=2020&format=json'

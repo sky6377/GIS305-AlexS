@@ -3,13 +3,6 @@ import arcpy
 import os
 from etl.GSheetsEtl import GSheetsEtl
 
-def setup():
-    with open('config/wnvoutbreak.yaml') as f:
-        config_dict = yaml.load(f, Loader=yaml.FullLoader)
-    return config_dict
-
-
-
 def laod(self):
     # Desciption: Creates a point feature class from input table
 
@@ -17,7 +10,7 @@ def laod(self):
     arcpy.env.workspace = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb"
     arcpy.env.overwriteOutput = True
 
-    # Set tge local variables
+    # Set the local variables
     in_table = r"C:\Users\Owner\Downloads\new_addresses.csv"
     out_feature_class = "avoid_points"
     x_coords = "X"
@@ -44,11 +37,14 @@ output_folder = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Outp
 gdb_path = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb"
 
 def setup():
+    with open('config/wnvoutbreak.yaml') as f:
+        config_dict = yaml.load(f, Loader=yaml.FullLoader)
     # Set up the workspace and environment settings
     arcpy.env.workspace = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb"
     arcpy.env.overwriteOutput = True
     # Ensure output folder exists
     os.makedirs(output_folder, exist_ok=True)
+    return config_dict
 
 def buffer(layer_name, buf_dist):
     # Buffer the incoming layer by the buffer distance
