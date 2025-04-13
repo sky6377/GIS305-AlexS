@@ -1,32 +1,14 @@
 import yaml
 import arcpy
 import os
-import requests
 from etl.GSheetsEtl import GSheetsEtl
-from etl.SpatialEtl import SpatialEtl
 
 def setup():
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
     return config_dict
 
-class GSheetsEtl(SpatialEtl):
 
-    def __init__(self, remote, local_dir, data_format, destination):
-        super().__self__(remote, local_dir, data_format, destination)
-
-    def extract(self):
-        print("Extracting addresses from Google Forms spreadsheet")
-        r = requests.get(self.config_dict.get('remote_url'))
-        r.encoding = "utf-8"
-        data = r.text
-        with open(f"{self.config_dict.get('proj_dir')}addresses.csv", 'w') as output_file:
-            output_file.write(data)
-
-    def process(self):
-        self.extract()
-        super().transform()
-        super().load()
 
 def laod(self):
     # Desciption: Creates a point feature class from input table
@@ -54,7 +36,8 @@ def process(self):
 
 def etl():
     print("etling...")
-    etl_instance = GSheetsEtl("https://foo_bar.com", "C://Users", "GSheets", "C://Users/my.gdb")
+    config_dict = setup()
+    etl_instance = GSheetsEtl(config_dict)
 
 # Global variable for the output folder
 output_folder = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output"
@@ -134,8 +117,8 @@ if __name__ == '__main__':
     global config_dict
     config_dict = setup()
     print(config_dict)
-    etl()
-    setup()  # Initialize the setup
+    etl_instance = GSheetsEtl(config_dict)
+    etl_instance.process()
 
     # List of layers to process
     buffer_layer_list = ["Mosquito_Larval_Sites", "Wetlands", "Lakes_and_Reservoirs", "OSMP_Properties"]
