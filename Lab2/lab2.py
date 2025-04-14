@@ -30,6 +30,7 @@ def etl():
     print("etling...")
     config_dict = setup()
     etl_instance = GSheetsEtl(config_dict)
+    etl_instance.process()  # Fix: Call process()
 
 # Global variable for the output folder
 output_folder = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output"
@@ -45,19 +46,12 @@ def setup():
     config_dict['output_folder'] = output_folder  # Update config_dict with default value
     return config_dict
 
-def buffer(layer_name, buf_dist):
+def buffer(layer_name, buf_dist, config_dict):
     # Buffer the incoming layer by the buffer distance
-    output_buffer_layer_path = f"{config_dict.get('output_folder')}buf_{layer_name}.shp"
+    output_buffer_layer_path = os.path.join(config_dict.get('output_folder'), f"buf_{layer_name}.shp")
     print(f"Buffering {layer_name} at {buf_dist} to generate {output_buffer_layer_path}")
 
-    arcpy.analysis.Buffer(
-        layer_name,
-        output_buffer_layer_path,
-        buf_dist,
-        "FULL",
-        "ROUND",
-        "ALL"
-    )
+    arcpy.analysis.Buffer(layer_name, output_buffer_layer_path, buf_dist, "FULL", "ROUND", "ALL")
     return output_buffer_layer_path
 
 def intersect(buffer_layer_list):
