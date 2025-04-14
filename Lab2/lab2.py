@@ -3,29 +3,28 @@ import arcpy
 import os
 from etl.GSheetsEtl import GSheetsEtl
 
-def laod(self):
-    # Desciption: Creates a point feature class from input table
-
+def load(self):
+    # Description: Creates a point feature class from input table
     # Set environment settings
-    arcpy.env.workspace = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb"
+    arcpy.env.workspace = f"{self.config_dict.get('proj_dir')}WestNileOutbreak.gdb"
     arcpy.env.overwriteOutput = True
 
     # Set the local variables
-    in_table = r"C:\Users\Owner\Downloads\new_addresses.csv"
-    out_feature_class = "avoid_points"
+    in_table = f"{self.config_dict.get('download_dir')}new_addresses.csv"
+    out_feature_class = self.config_dict.get('avoid_points_name', 'avoid_points')
     x_coords = "X"
-    y_coords = "y"
+    y_coords = "Y"
 
-    # Make the XY event layer...
-    arcpy.Management.XYTableToPoint(in_table, out_feature_class, x_coords, y_coords)
+    # Make the XY event layer
+    arcpy.management.XYTableToPoint(in_table, out_feature_class, x_coords, y_coords)
 
     # Print the total rows
     print(arcpy.GetCount_management(out_feature_class))
 
 def process(self):
     self.extract()
-    super().transform()
-    super().load()
+    self.transform()
+    self.load()
 
 def etl():
     print("etling...")
@@ -39,17 +38,17 @@ gdb_path = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileO
 def setup():
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
-    # Set up the workspace and environment settings
-    arcpy.env.workspace = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb"
-    arcpy.env.overwriteOutput = True
+
     # Ensure output folder exists
-    os.makedirs(output_folder, exist_ok=True)
+    output_folder = config_dict.get('output_folder', r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output")
+    os.makedirs(config_dict.get('output_folder'), exist_ok=True)
+    config_dict['output_folder'] = output_folder  # Update config_dict with default value
     return config_dict
 
 def buffer(layer_name, buf_dist):
     # Buffer the incoming layer by the buffer distance
-    output_buffer_layer_path = f"{output_folder}\\buf_{layer_name}.shp"
-    print(f"Buffering {layer_name} at {buf_dist} to generate {layer_name}")
+    output_buffer_layer_path = f"{config_dict.get('output_folder')}buf_{layer_name}.shp"
+    print(f"Buffering {layer_name} at {buf_dist} to generate {output_buffer_layer_path}")
 
     arcpy.analysis.Buffer(
         layer_name,
@@ -57,14 +56,14 @@ def buffer(layer_name, buf_dist):
         buf_dist,
         "FULL",
         "ROUND",
-        "ALL")
+        "ALL"
+    )
     return output_buffer_layer_path
 
 def intersect(buffer_layer_list):
-    #Intersect the 4 buffered layers and intersect them together.
     lyr_intersect = input("Enter the name for the intersect output layer name: ")
-    lyr_intersect_path = f"{gdb_path}\\{lyr_intersect}"
-    print(f"Intersecting {buffer_layer_list} to generate {lyr_intersect} storing to {lyr_intersect_path}")
+    lyr_intersect_path = f"{config_dict.get('gdb_path')}{lyr_intersect}"
+    print(f"Intersecting {buffer_layer_list} to generate {lyr_intersect_path}")
 
     arcpy.analysis.Intersect(
         in_features=buffer_layer_list,
@@ -73,11 +72,21 @@ def intersect(buffer_layer_list):
         cluster_tolerance=None,
         output_type="INPUT"
     )
-    return lyr_intersect
+    return lyr_intersect_path
+
+def erase(intersect_layer, avoid_points_buffer_layer):
+    erased_layer_path = f"{config_dict.get('gdb_path')}Erased_Intersect"
+    print(f"Erasing {avoid_points_buffer_layer} from {intersect_layer} to generate {erased_layer_path}")
+
+    arcpy.analysis.Erase(
+        in_features=intersect_layer,
+        erase_features=avoid_points_buffer_layer,
+        out_feature_class=erased_layer_path
+    )
+    return erased_layer_path
 
 def spatial_join(Building_Addresses, lyr_intersect):
-    # Combine the intersected layer with the address layer
-    join_layer_path = f"{gdb_path}\\Address_Join_Intersect"
+    join_layer_path = f"{config_dict.get('gdb_path')}Address_Join_Intersect"
     print(f"Performing spatial join with {Building_Addresses} as target and {lyr_intersect} as join feature.")
 
     arcpy.analysis.SpatialJoin(
@@ -90,15 +99,13 @@ def spatial_join(Building_Addresses, lyr_intersect):
     return join_layer_path
 
 def count_addresses(join_layer_path):
-    # Count the number of addresses in the join layer
     count_result = arcpy.management.GetCount(join_layer_path)
     count = int(count_result.getOutput(0))
     print(f"The number of addresses that fall within the intersect layer is: {count}")
     return count
 
 def add_to_project(new_layer_path):
-    # Add the joined layer to the project
-    proj_path = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.aprx"
+    proj_path = config_dict.get('proj_path')
     aprx = arcpy.mp.ArcGISProject(proj_path)
     map_doc = aprx.listMaps()[0]
 
@@ -113,8 +120,8 @@ if __name__ == '__main__':
     global config_dict
     config_dict = setup()
     print(config_dict)
-    etl_instance = GSheetsEtl(config_dict)
-    etl_instance.process()
+
+    etl()
 
     # List of layers to process
     buffer_layer_list = ["Mosquito_Larval_Sites", "Wetlands", "Lakes_and_Reservoirs", "OSMP_Properties"]
@@ -134,8 +141,19 @@ if __name__ == '__main__':
     lyr_intersect_path = intersect([f"buf_{layer}" for layer in buffer_layer_list]) # Placeholder method call
     print("Intersect complete.")
 
+    # Buffer the Avoid_Points layer
+    avoid_points_buffer_layer = buffer(
+        layer_name=config_dict.get('avoid_points_name', 'avoid_points'),
+        buf_dist=config_dict.get('avoid_buffer_distance', '100 feet')  # Default buffer distance
+    )
+    print("Avoid points buffering complete.")
+
+    # Perform erase analysis
+    erased_layer_path = erase(lyr_intersect_path, avoid_points_buffer_layer)
+    print("Erase analysis complete.")
+
     # Perform spatial join
-    joined_layer_path = spatial_join("Building_Addresses", lyr_intersect_path)
+    joined_layer_path = spatial_join("Building_Addresses", erased_layer_path)
     print("Spatial join complete.")
 
     # Count addresses within the intersect layer

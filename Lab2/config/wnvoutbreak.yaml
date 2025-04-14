@@ -3,3 +3,8 @@ proj_dir: 'C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOut
 data_format: 'GSheet'
 geocoder_prefix_url: 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address='
 geocoder_suffix_url: '&benchmark=2020&format=json'
+output_folder: C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output
+gdb_path: C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb
+download_dir: C:\Users\Owner\Downloads\
+proj_path: C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.aprx
+avoid_buffer_distance: 1500 feet
