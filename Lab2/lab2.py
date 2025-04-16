@@ -14,12 +14,14 @@ def load(self):
     y_coords = "Y"
 
     arcpy.management.XYTableToPoint(in_table, out_feature_class, x_coords, y_coords)
+    print("Available feature classes in the workspace:", arcpy.ListFeatureClasses())
 
     # Ensure the feature class is created successfully
     if arcpy.Exists(out_feature_class):
         print(f"Feature class '{out_feature_class}' created successfully.")
     else:
         raise FileNotFoundError(f"Failed to create feature class '{out_feature_class}'.")
+    print(arcpy.GetMessages())
 
 
 def process(self):

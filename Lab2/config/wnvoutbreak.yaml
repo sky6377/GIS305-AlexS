@@ -1,10 +1,10 @@
 remote_url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRcWohPXE6Hr0bu66CFRne1ljaLQdWia8xDArwk4tyR7sdFDKImVDwzYjxi5wkRmWZtLCi8nnftZP3H/pub?output=csv'
-proj_dir: 'C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\'
+proj_dir: "C:\\Users\\Owner\\Documents\\GIS Programming\\westnileoutbreak\\WestNileOutbreak\\"
+output_folder: "C:\\Users\\Owner\\Documents\\GIS Programming\\westnileoutbreak\\Output"
+gdb_path: "C:\\Users\\Owner\\Documents\\GIS Programming\\westnileoutbreak\\WestNileOutbreak\\WestNileOutbreak.gdb"
+download_dir: "C:\\Users\\Owner\\Downloads\\"
+proj_path: "C:\\Users\\Owner\\Documents\\GIS Programming\\westnileoutbreak\\WestNileOutbreak\\WestNileOutbreak.aprx"
 data_format: 'GSheet'
 geocoder_prefix_url: 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address='
 geocoder_suffix_url: '&benchmark=2020&format=json'
-output_folder: C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output
-gdb_path: C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.gdb
-download_dir: C:\Users\Owner\Downloads\
-proj_path: C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\WestNileOutbreak.aprx
-avoid_buffer_distance: 1500 feet
+avoid_buffer_distance: "1500 feet"
