@@ -1,4 +1,4 @@
-remote_url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTDjitOlmILea7koCORJkq6QrUcwBJM7K3vy4guXB0mU_nWR6wsPn136bpH6ykoUxyYMW7wTwkzE37l/pub?output=csv'
+remote_url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRcWohPXE6Hr0bu66CFRne1ljaLQdWia8xDArwk4tyR7sdFDKImVDwzYjxi5wkRmWZtLCi8nnftZP3H/pub?output=csv'
 proj_dir: 'C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileOutbreak\'
 data_format: 'GSheet'
 geocoder_prefix_url: 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address='
