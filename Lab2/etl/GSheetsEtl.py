@@ -4,8 +4,9 @@ import requests
 from Lab2.etl.SpatialEtl import SpatialEtl
 
 class GSheetsEtl(SpatialEtl):
-    #A dictionary of configuration keys and values
+    # A dictionary of configuration keys and values
     config_dict = None
+
     def __init__(self, config_dict):
         super().__init__(config_dict)
 
@@ -25,7 +26,7 @@ class GSheetsEtl(SpatialEtl):
                 csv_dict = csv.DictReader(partial_file, delimiter=',')
                 for row in csv_dict:
                     address = row[
-                                  "Street Address"] + f" {self.config_dict.get('city', 'Boulder')} {self.config_dict.get('state', 'CO')}"
+                        "Street Address"] + f" {self.config_dict.get('city', 'Boulder')} {self.config_dict.get('state', 'CO')}"
                     print(address)
                     geocode_url = (
                         f"{self.config_dict.get('geocode_base_url', 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress')}"
@@ -47,16 +48,13 @@ class GSheetsEtl(SpatialEtl):
         arcpy.env.workspace = self.config_dict.get('gdb_path', r"C:\default\path\to\geodatabase.gdb")
         arcpy.env.overwriteOutput = True
 
-        # Set local variables
-        out_feature_class = self.config_dict.get('feature_class', 'default_feature_class')
+        # Create Avoid_Points feature class
+        out_feature_class = self.config_dict.get('avoid_points_name', 'Avoid_Points')
         x_coords = "X"
         y_coords = "Y"
 
-        # Make the XY event layer
         arcpy.management.XYTableToPoint(input_table, out_feature_class, x_coords, y_coords)
-
-        # Print the total rows in the feature class
-        print(f"Feature class created with {arcpy.GetCount_management(out_feature_class)} records")
+        print(f"Feature class '{out_feature_class}' created successfully.")
 
     def process(self):
         self.extract()
