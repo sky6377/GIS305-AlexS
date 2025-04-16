@@ -5,12 +5,21 @@ from etl.GSheetsEtl import GSheetsEtl
 
 
 def load(self):
-    in_table = f"{self.config_dict.get('download_dir')}new_addresses.csv"
+    in_table = os.path.join(self.config_dict.get('download_dir'), 'new_addresses.csv')
+    if not os.path.exists(in_table):
+        raise FileNotFoundError(f"Input table '{in_table}' does not exist.")
+
     out_feature_class = self.config_dict.get('avoid_points_name', 'avoid_points')
     x_coords = "X"
     y_coords = "Y"
+
     arcpy.management.XYTableToPoint(in_table, out_feature_class, x_coords, y_coords)
-    print(arcpy.GetCount_management(out_feature_class))
+
+    # Ensure the feature class is created successfully
+    if arcpy.Exists(out_feature_class):
+        print(f"Feature class '{out_feature_class}' created successfully.")
+    else:
+        raise FileNotFoundError(f"Failed to create feature class '{out_feature_class}'.")
 
 
 def process(self):
@@ -31,28 +40,35 @@ gdb_path = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileO
 
 
 def setup():
+    global output_folder  # Declare output_folder as global
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
 
-    arcpy.env.workspace = f"{config_dict.get('proj_dir')}WestNileOutbreak.gdb"
+    arcpy.env.workspace = os.path.join(config_dict.get('proj_dir'), 'WestNileOutbreak.gdb')
     arcpy.env.overwriteOutput = True
-    output_folder = config_dict.get('output_folder',
-                                    r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output")
-    os.makedirs(config_dict.get('output_folder'), exist_ok=True)
+    print(f"Workspace set to: {arcpy.env.workspace}")
+    print("Feature classes available in workspace:", arcpy.ListFeatureClasses())
+
+    output_folder = config_dict.get('output_folder', output_folder)
+    os.makedirs(output_folder, exist_ok=True)
     config_dict['output_folder'] = output_folder
     return config_dict
 
 
 def buffer(layer_name, buf_dist, config_dict):
     output_buffer_layer_path = os.path.join(config_dict.get('output_folder'), f"buf_{layer_name}.shp")
-    print(f"Buffering {layer_name} at {buf_dist} to generate {output_buffer_layer_path}")
-    arcpy.analysis.Buffer(layer_name, output_buffer_layer_path, buf_dist, "FULL", "ROUND", "ALL")
-    return output_buffer_layer_path
+    if arcpy.Exists(layer_name):
+        print(f"Buffering {layer_name} at {buf_dist} to generate {output_buffer_layer_path}")
+        arcpy.analysis.Buffer(layer_name, output_buffer_layer_path, buf_dist, "FULL", "ROUND", "ALL")
+        return output_buffer_layer_path
+    else:
+        raise FileNotFoundError(f"Input Features '{layer_name}' do not exist.")
 
 
-def intersect(buffer_layer_list):
+def intersect(buffer_layer_list, config_dict):
     lyr_intersect = input("Enter the name for the intersect output layer name: ")
-    lyr_intersect_path = f"{config_dict.get('gdb_path')}/{lyr_intersect}"
+    lyr_intersect_path = os.path.join(config_dict.get('gdb_path'), lyr_intersect)
+
     print(f"Intersecting {buffer_layer_list} to generate {lyr_intersect_path}")
     arcpy.analysis.Intersect(
         in_features=buffer_layer_list,
@@ -104,7 +120,6 @@ def add_to_project(new_layer_path):
     aprx.save()
     print("Project saved.")
 
-
 if __name__ == '__main__':
     global config_dict
     config_dict = setup()
@@ -115,20 +130,29 @@ if __name__ == '__main__':
     buffer_layer_list = ["Mosquito_Larval_Sites", "Wetlands", "Lakes_and_Reservoirs", "OSMP_Properties"]
 
     for layer in buffer_layer_list:
-        print(f"Processing layer: {layer}")
-        input_distance = input("Enter the buffer distance in feet: ")
-        buffer(layer, input_distance + " feet", config_dict)
+        if arcpy.Exists(layer):
+            input_distance = input("Enter the buffer distance in feet: ").strip()
+            if not input_distance.replace(" ", "").replace("feet", "").isdigit():
+                raise ValueError(f"Invalid buffer distance: {input_distance}")
+            buffer(layer, input_distance + " feet", config_dict)
+        else:
+            print(f"Layer '{layer}' does not exist in the workspace.")
     print("Buffering complete.")
 
-    lyr_intersect_path = intersect([f"buf_{layer}" for layer in buffer_layer_list])
+    lyr_intersect_path = intersect([f"buf_{layer}" for layer in buffer_layer_list], config_dict)
     print("Intersect complete.")
 
-    avoid_points_buffer_layer = buffer(
-        layer_name=config_dict.get('avoid_points_name', 'avoid_points'),
-        buf_dist=config_dict.get('avoid_buffer_distance', '100 feet'),
-        config_dict=config_dict
-    )
-    print("Avoid points buffering complete.")
+
+    avoid_points_layer_name = config_dict.get('avoid_points_name', 'avoid_points')
+    if arcpy.Exists(avoid_points_layer_name):
+        avoid_points_buffer_layer = buffer(
+            layer_name=avoid_points_layer_name,
+            buf_dist=config_dict.get('avoid_buffer_distance', '100 feet'),
+            config_dict=config_dict
+        )
+        print("Avoid points buffering complete.")
+    else:
+        raise FileNotFoundError(f"'avoid_points' dataset not found. Check load function.")
 
     erased_layer_path = erase(lyr_intersect_path, avoid_points_buffer_layer)
     print("Erase analysis complete.")
