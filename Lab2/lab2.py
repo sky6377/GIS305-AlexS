@@ -3,13 +3,12 @@ import arcpy
 import os
 from etl.GSheetsEtl import GSheetsEtl
 
-
-def load(self):
-    in_table = os.path.join(self.config_dict.get('download_dir'), 'new_addresses.csv')
+def load(config_dict):
+    in_table = os.path.join(config_dict.get('download_dir'), 'new_addresses.csv')
     if not os.path.exists(in_table):
         raise FileNotFoundError(f"Input table '{in_table}' does not exist.")
 
-    out_feature_class = self.config_dict.get('avoid_points_name', 'avoid_points')
+    out_feature_class = config_dict.get('avoid_points_name', 'avoid_points')
     x_coords = "X"
     y_coords = "Y"
 
@@ -24,17 +23,22 @@ def load(self):
     print(arcpy.GetMessages())
 
 
-def process(self):
-    self.extract()
-    self.transform()
-    self.load()
+def process(config_dict):
+    etl_instance = GSheetsEtl(config_dict)
+    etl_instance.extract()
+
+    # Get input and output file paths from config_dict
+    input_file = os.path.join(config_dict.get('download_dir', ''), 'raw_addresses.csv')
+    output_file = os.path.join(config_dict.get('download_dir', ''), 'new_addresses.csv')
+
+    etl_instance.transform(input_file, output_file)
+    load(config_dict)
 
 
 def etl():
-    print("etling...")
+    print("ETL process starting...")
     config_dict = setup()
-    etl_instance = GSheetsEtl(config_dict)
-    etl_instance.process()
+    process(config_dict)
 
 
 output_folder = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output"
@@ -42,7 +46,6 @@ gdb_path = r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\WestNileO
 
 
 def setup():
-    global output_folder  # Declare output_folder as global
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -51,7 +54,7 @@ def setup():
     print(f"Workspace set to: {arcpy.env.workspace}")
     print("Feature classes available in workspace:", arcpy.ListFeatureClasses())
 
-    output_folder = config_dict.get('output_folder', output_folder)
+    output_folder = config_dict.get('output_folder', r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output")
     os.makedirs(output_folder, exist_ok=True)
     config_dict['output_folder'] = output_folder
     return config_dict
@@ -83,14 +86,34 @@ def intersect(buffer_layer_list, config_dict):
 
 
 def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
-    erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Erased_Intersect")
-    print(f"Erasing {avoid_points_buffer_layer} from {intersect_layer} to generate {erased_layer_path}")
-    arcpy.analysis.Erase(
-        in_features=intersect_layer,
-        erase_features=avoid_points_buffer_layer,
-        out_feature_class=erased_layer_path
-    )
-    return erased_layer_path
+    try:
+        # First, repair the geometry of both input layers
+        arcpy.management.RepairGeometry(intersect_layer, "DELETE_NULL")
+        arcpy.management.RepairGeometry(avoid_points_buffer_layer, "DELETE_NULL")
+
+        erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Erased_Intersect")
+        print(f"Erasing {avoid_points_buffer_layer} from {intersect_layer} to generate {erased_layer_path}")
+
+        # Perform the erase operation
+        arcpy.analysis.Erase(
+            in_features=intersect_layer,
+            erase_features=avoid_points_buffer_layer,
+            out_feature_class=erased_layer_path
+        )
+
+        # Verify the output was created
+        if arcpy.Exists(erased_layer_path):
+            return erased_layer_path
+        else:
+            raise arcpy.ExecuteError("Failed to create erased layer")
+
+    except arcpy.ExecuteError as e:
+        print(f"Error in erase operation: {str(e)}")
+        print(arcpy.GetMessages())
+        raise
+    except Exception as e:
+        print(f"Unexpected error in erase operation: {str(e)}")
+        raise
 
 
 def spatial_join(Building_Addresses, lyr_intersect):
@@ -123,11 +146,10 @@ def add_to_project(new_layer_path):
     print("Project saved.")
 
 if __name__ == '__main__':
-    global config_dict
     config_dict = setup()
     print(config_dict)
-
     etl()
+
 
     buffer_layer_list = ["Mosquito_Larval_Sites", "Wetlands", "Lakes_and_Reservoirs", "OSMP_Properties"]
 
