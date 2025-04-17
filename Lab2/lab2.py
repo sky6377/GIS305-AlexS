@@ -91,8 +91,8 @@ def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
         arcpy.management.RepairGeometry(intersect_layer, "DELETE_NULL")
         arcpy.management.RepairGeometry(avoid_points_buffer_layer, "DELETE_NULL")
 
-        erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Erased_Intersect")
-        print(f"Erasing {avoid_points_buffer_layer} from {intersect_layer} to generate {erased_layer_path}")
+        #erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Erased_Intersect")
+        #print(f"Erasing {avoid_points_buffer_layer} from {intersect_layer} to generate {erased_layer_path}")
 
         # Perform the erase operation
         arcpy.analysis.Erase(
@@ -162,9 +162,11 @@ if __name__ == '__main__':
         else:
             print(f"Layer '{layer}' does not exist in the workspace.")
     print("Buffering complete.")
+    print(arcpy.GetMessages())
 
     lyr_intersect_path = intersect([f"buf_{layer}" for layer in buffer_layer_list], config_dict)
     print("Intersect complete.")
+    print(arcpy.GetMessages())
 
     avoid_points_layer_name = config_dict.get('avoid_points_name', 'Avoid_Points')
     avoid_points_buffer_layer = buffer(
@@ -173,18 +175,23 @@ if __name__ == '__main__':
         config_dict=config_dict
     )
     print("Avoid_Points buffering complete.")
+    print(arcpy.GetMessages())
 
     erased_layer_path = erase(lyr_intersect_path, avoid_points_buffer_layer, config_dict)
     print(f"Erased layer created at: {erased_layer_path}")
 
     print("All operations completed successfully.")
+    print(arcpy.GetMessages())
 
     joined_layer_path = spatial_join("Building_Addresses", erased_layer_path)
     print("Spatial join complete.")
+    print(arcpy.GetMessages())
 
     print("Counting addresses within the intersect layer...")
     address_count = count_addresses(joined_layer_path)
     print(f"Number of addresses within the intersect layer: {address_count}")
+    print(arcpy.GetMessages())
 
     add_to_project(joined_layer_path)
     print("All operations completed successfully.")
+    print(arcpy.GetMessages())
