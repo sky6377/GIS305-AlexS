@@ -91,8 +91,8 @@ def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
         arcpy.management.RepairGeometry(intersect_layer, "DELETE_NULL")
         arcpy.management.RepairGeometry(avoid_points_buffer_layer, "DELETE_NULL")
 
-        #erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Erased_Intersect")
-        #print(f"Erasing {avoid_points_buffer_layer} from {intersect_layer} to generate {erased_layer_path}")
+        erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Erased_Intersect")
+        print(f"Erasing {avoid_points_buffer_layer} from {intersect_layer} to generate {erased_layer_path}")
 
         # Perform the erase operation
         arcpy.analysis.Erase(
