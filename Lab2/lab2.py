@@ -1,6 +1,7 @@
 import yaml
 import arcpy
 import os
+import multiprocessing
 from etl.GSheetsEtl import GSheetsEtl
 
 def load(config_dict):
@@ -147,6 +148,7 @@ def add_to_project(new_layer_path):
 
 if __name__ == '__main__':
     config_dict = setup()
+    arcpy.env.parallelProcessingFactor = "100%"  # Utilize all available cores
     print(config_dict)
     etl()
 
@@ -183,7 +185,7 @@ if __name__ == '__main__':
     print("All operations completed successfully.")
     print(arcpy.GetMessages())
 
-    joined_layer_path = spatial_join("Building_Addresses", erased_layer_path)
+    joined_layer_path = spatial_join("Building_Addresses", lyr_intersect_path)
     print("Spatial join complete.")
     print(arcpy.GetMessages())
 
