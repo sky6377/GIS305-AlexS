@@ -155,6 +155,37 @@ def add_to_project(new_layer_path):
     aprx.save()
     print("Project saved.")
 
+
+def exportMap(config_dict):
+    """
+    Dynamically exports the map layout as a PDF with a custom subtitle.
+    Args:
+        config_dict (dict): Configuration dictionary containing paths and settings.
+    """
+    try:
+        # Get the project object
+        aprx = arcpy.mp.ArcGISProject(f"{config_dict.get('proj_dir')}WestNileOutbreak.aprx")
+
+        # Get the first layout in the project
+        lyt = aprx.listLayouts()[0]
+
+        # Prompt the user for the sub-title of the output map
+        subtitle = input("Enter the sub-title for the output map: ")
+
+        # Loop through the layout elements to find the title object and update it with the user subtitle
+        for el in lyt.listElements():
+            print(el.name)  # Debugging to check element names
+            if "Title" in el.name:  # Assumption: Title object includes 'Title' in its name
+                el.text = el.text + " " + subtitle  # Appending the subtitle
+
+        # Export the layout to a PDF file
+        output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
+        lyt.exportToPDF(output_path)
+        print(f"Map exported successfully to {output_path}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    raise
+
 if __name__ == '__main__':
     config_dict = setup()
     arcpy.env.parallelProcessingFactor = "100%"  # Utilize all available cores
@@ -199,9 +230,20 @@ if __name__ == '__main__':
 
     print("Counting addresses within the intersect layer...")
     address_count = count_addresses(joined_layer_path)
+    if address_count == 0:
+        print("No addresses found within the intersect layer.")
+    else:
+        print(f"Found {address_count} addresses within the intersect layer.")
     print(f"Number of addresses within the intersect layer: {address_count}")
     print(arcpy.GetMessages())
 
+    print("Adding joined layer to the project...")
     add_to_project(joined_layer_path)
+
+    print("Exporting map...")
+    exportMap(config_dict)
+    print(f"Map Exported to {config_dict.get('output_folder')}")
+    print(arcpy.GetMessages())
+
     print("All operations completed successfully.")
     print(arcpy.GetMessages())
