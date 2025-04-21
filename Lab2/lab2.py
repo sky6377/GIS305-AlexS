@@ -88,21 +88,26 @@ def intersect(buffer_layer_list, config_dict):
 
 def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
     try:
-        # First, repair the geometry of both input layers
-        arcpy.management.RepairGeometry(intersect_layer, "DELETE_NULL")
-        arcpy.management.RepairGeometry(avoid_points_buffer_layer, "DELETE_NULL")
+        for layer in [intersect_layer, avoid_points_buffer_layer]:
+            arcpy.management.RepairGeometry(layer, "DELETE_NULL")
+            if int(arcpy.management.GetCount(layer)[0]) == 0:
+                raise ValueError(f"Layer {layer} is empty or invalid after geometry repair.")
+
+        # Optionally dissolve to avoid geometry problems
+        dissolved_intersect = os.path.join(config_dict.get('gdb_path'), "Dissolved_Intersect")
+        dissolved_avoid = os.path.join(config_dict.get('gdb_path'), "Dissolved_Avoid")
+        arcpy.management.Dissolve(intersect_layer, dissolved_intersect)
+        arcpy.management.Dissolve(avoid_points_buffer_layer, dissolved_avoid)
 
         erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Erased_Intersect")
-        print(f"Erasing {avoid_points_buffer_layer} from {intersect_layer} to generate {erased_layer_path}")
+        print(f"Erasing {dissolved_avoid} from {dissolved_intersect} to generate {erased_layer_path}")
 
-        # Perform the erase operation
         arcpy.analysis.Erase(
-            in_features=intersect_layer,
-            erase_features=avoid_points_buffer_layer,
+            in_features=dissolved_intersect,
+            erase_features=dissolved_avoid,
             out_feature_class=erased_layer_path
         )
 
-        # Verify the output was created
         if arcpy.Exists(erased_layer_path):
             return erased_layer_path
         else:
