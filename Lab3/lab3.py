@@ -131,8 +131,8 @@ def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
         raise
 
 
-def spatial_join(Building_Addresses, lyr_intersect):
-    join_layer_path = f"{config_dict.get('gdb_path')}/Address_Join_Intersect"
+def spatial_join(Building_Addresses, lyr_intersect, config_dict):
+    join_layer_path = os.path.join(config_dict.get('gdb_path'), "Address_Join_Intersect")
     print(f"Performing spatial join with {Building_Addresses} as target and {lyr_intersect} as join feature.")
     arcpy.analysis.SpatialJoin(
         target_features=Building_Addresses,
@@ -187,9 +187,9 @@ def exportMap(config_dict):
         output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
         lyt.exportToPDF(output_path)
         print(f"Map exported successfully to {output_path}")
-    except Exception as e:
+        except Exception as e:
         print(f"An error occurred: {e}")
-    raise
+        raise e  # OR remove this line if you don't need to propagate the error
 
 if __name__ == '__main__':
     config_dict = setup()
@@ -229,7 +229,7 @@ if __name__ == '__main__':
     print("All operations completed successfully.")
     print(arcpy.GetMessages())
 
-    joined_layer_path = spatial_join("Building_Addresses", lyr_intersect_path)
+    joined_layer_path = spatial_join("Building_Addresses", lyr_intersect_path, config_dict)
     print("Spatial join complete.")
     print(arcpy.GetMessages())
 
