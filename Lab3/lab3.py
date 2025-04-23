@@ -187,9 +187,10 @@ def exportMap(config_dict):
         output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
         lyt.exportToPDF(output_path)
         print(f"Map exported successfully to {output_path}")
-        except Exception as e:
+
+    except Exception as e:
         print(f"An error occurred: {e}")
-        raise e  # OR remove this line if you don't need to propagate the error
+        raise e
 
 if __name__ == '__main__':
     config_dict = setup()
