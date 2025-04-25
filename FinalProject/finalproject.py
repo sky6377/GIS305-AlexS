@@ -3,6 +3,12 @@ import arcpy
 import os
 import logging
 from etl.GSheetsEtl import GSheetsEtl
+from typing import List, Dict
+
+# Constants
+PARALLEL_PROCESSING_FACTOR = "100%"
+AVOID_POINTS_BUFFER_DISTANCE = "100 feet"
+BUFFER_LAYERS = ["Mosquito_Larval_Sites", "Wetlands", "Lakes_and_Reservoirs", "OSMP_Properties"]
 
 def setup_logging(config_dict):
     """Sets up logging with the project directory."""
@@ -16,11 +22,11 @@ def setup_logging(config_dict):
     logging.info("Logging initialized.")
     logging.debug("Log file created at: %s", log_file)
 
-    def validate_file_path(file_path):
-        """Validates the existence of a file."""
-        if not os.path.exists(file_path):
-            logging.error(f"File '{file_path}' not found.")
-            raise FileNotFoundError(f"File '{file_path}' does not exist.")
+def validate_file_path(file_path):
+    """Validates the existence of a file."""
+    if not os.path.exists(file_path):
+        logging.error(f"File '{file_path}' not found.")
+        raise FileNotFoundError(f"File '{file_path}' does not exist.")
 
 
 def load_table_to_feature_class(config_dict):
@@ -220,26 +226,73 @@ def exportMap(config_dict):
         print(f"An error occurred: {e}")
         raise e
 
+def process_buffer_layers(buffer_layer_list: List[str], config_dict: Dict) -> List[str]:
+    """Process buffer operations for the given layers.
+    
+    Args:
+        buffer_layer_list: List of layer names to buffer
+        config_dict: Configuration dictionary
+        
+    Returns:
+        List of processed buffer layer paths
+    """
+    buffered_layers = []
+    for layer_name in buffer_layer_list:
+        if not arcpy.Exists(layer_name):
+            print(f"Layer '{layer_name}' does not exist in the workspace.")
+            continue
+            
+        buffer_distance = get_validated_buffer_distance(layer_name)
+        buffered_layer = buffer_layer(layer_name, f"{buffer_distance} feet", config_dict)
+        buffered_layers.append(buffered_layer)
+    
+    return buffered_layers
+
+def get_validated_buffer_distance(layer_name: str) -> str:
+    """Get and validate buffer distance input from user.
+    
+    Args:
+        layer_name: Name of the layer to get buffer distance for
+        
+    Returns:
+        Validated buffer distance value
+        
+    Raises:
+        ValueError: If invalid buffer distance is provided
+    """
+    buffer_distance = input(f"Enter the buffer distance in feet for {layer_name}: ").strip()
+    if not buffer_distance.replace(" ", "").replace("feet", "").isdigit():
+        raise ValueError(f"Invalid buffer distance: {buffer_distance}")
+    return buffer_distance
 
 def main():
     """Main entry point for the script."""
     config_dict = setup_environment()
-    arcpy.env.parallelProcessingFactor = "100%"
+    arcpy.env.parallelProcessingFactor = PARALLEL_PROCESSING_FACTOR
 
+    # ETL Processing
     process_etl(config_dict)
+    print("ETL process completed.")
 
-    buffer_layer_list = ["Mosquito_Larval_Sites", "Wetlands", "Lakes_and_Reservoirs", "OSMP_Properties"]
-    buffered_layers = [
-        buffer_layer(layer, "500 feet", config_dict) for layer in buffer_layer_list
-    ]
+    # Buffer Processing
+    buffered_layers = process_buffer_layers(BUFFER_LAYERS, config_dict)
+    print("Buffering complete.")
+    print(arcpy.GetMessages())
 
+    # Intersection and Erase Operations
+    print("Starting Intersection and Erase Operations.")
     intersect_path = perform_intersect(buffered_layers, config_dict)
+    print("Intersect operation completed.")
+    
     avoid_points_buffer = buffer_layer(
         config_dict.get('avoid_points_name', 'Avoid_Points'),
-        "100 feet",
+        AVOID_POINTS_BUFFER_DISTANCE,
         config_dict
     )
+    print("Buffering avoid points complete.")
+    
     erase_features(intersect_path, avoid_points_buffer, config_dict)
+    print("Erase operation completed.")
     logging.info("Script execution completed successfully.")
 
 

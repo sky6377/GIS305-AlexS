@@ -4,7 +4,9 @@ import os
 import logging
 import sys
 from etl.GSheetsEtl import GSheetsEtl
+from datetime import datetime
 
+# Set up logging
 def setup_logging(config_dict):
     logging.basicConfig(
         filename=f"{config_dict.get('proj_dir')}wnv.log",
@@ -163,7 +165,7 @@ def add_to_project(new_layer_path):
 
 def exportMap(config_dict):
     """
-    Dynamically exports the map layout as a PDF with a custom subtitle.
+    Dynamically exports the map layout as a PDF with a custom subtitle and model run date.
     Args:
         config_dict (dict): Configuration dictionary containing paths and settings.
     """
@@ -174,14 +176,17 @@ def exportMap(config_dict):
         # Get the first layout in the project
         lyt = aprx.listLayouts()[0]
 
-        # Prompt the user for the sub-title of the output map
+        # Prompt the user for the subtitle of the output map
         subtitle = input("Enter the sub-title for the output map: ")
 
-        # Loop through the layout elements to find the title object and update it with the user subtitle
+        # Get the current date and time for the model run
+        model_run_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Loop through layout elements to find the title object and update it
         for el in lyt.listElements():
             print(el.name)  # Debugging to check element names
             if "Title" in el.name:  # Assumption: Title object includes 'Title' in its name
-                el.text = el.text + " " + subtitle  # Appending the subtitle
+                el.text = el.text + " " + subtitle + f"\nModel Run Date: {model_run_date}"
 
         # Export the layout to a PDF file
         output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
