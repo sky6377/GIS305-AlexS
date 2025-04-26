@@ -2,61 +2,51 @@ import yaml
 import arcpy
 import os
 import logging
+import sys
 from etl.GSheetsEtl import GSheetsEtl
-from typing import List, Dict
+from datetime import datetime
 
-# Constants
-PARALLEL_PROCESSING_FACTOR = "100%"
-AVOID_POINTS_BUFFER_DISTANCE = "100 feet"
-BUFFER_LAYERS = ["Mosquito_Larval_Sites", "Wetlands", "Lakes_and_Reservoirs", "OSMP_Properties"]
-
+# Set up logging
 def setup_logging(config_dict):
-    """Sets up logging with the project directory."""
-    log_file = os.path.join(config_dict.get('proj_dir'), 'wnv.log')
     logging.basicConfig(
-        filename=log_file,
+        filename=f"{config_dict.get('proj_dir')}wnv.log",
         filemode="w",
-        level=logging.DEBUG,
-        format="%(asctime)s - %(levelname)s - %(message)s"
+        level=logging.DEBUG
     )
-    logging.info("Logging initialized.")
-    logging.debug("Log file created at: %s", log_file)
 
-def validate_file_path(file_path):
-    """Validates the existence of a file."""
-    if not os.path.exists(file_path):
-        logging.error(f"File '{file_path}' not found.")
-        raise FileNotFoundError(f"File '{file_path}' does not exist.")
-
-
-def load_table_to_feature_class(config_dict):
-    """Loads a table and creates a feature class."""
-    in_table = os.path.join(config_dict['download_dir'], 'new_addresses.csv')
-    validate_file_path(in_table)
+def load(config_dict):
+    logging.debug("Entering load method")
+    in_table = os.path.join(config_dict.get('download_dir'), 'new_addresses.csv')
+    if not os.path.exists(in_table):
+        logging.error(f"Input table '{in_table}' does not exist.")
+        raise FileNotFoundError(f"Input table '{in_table}' does not exist.")
 
     out_feature_class = config_dict.get('avoid_points_name', 'avoid_points')
-    x_coords, y_coords = "X", "Y"
+    x_coords = "X"
+    y_coords = "Y"
 
     arcpy.management.XYTableToPoint(in_table, out_feature_class, x_coords, y_coords)
+    logging.info("Available feature classes in the workspace: %s", arcpy.ListFeatureClasses())
 
+    # Ensure the feature class is created successfully
     if arcpy.Exists(out_feature_class):
         logging.info(f"Feature class '{out_feature_class}' created successfully.")
     else:
         logging.error(f"Failed to create feature class '{out_feature_class}'.")
-        raise RuntimeError(f"Feature class creation failed.")
+        raise FileNotFoundError(f"Failed to create feature class '{out_feature_class}'.")
+    logging.debug("Exiting load method")
 
-
-def process_etl(config_dict):
-    """Processes the ETL workflow."""
+def process(config_dict):
+    logging.debug("Entering process method")
     etl_instance = GSheetsEtl(config_dict)
     etl_instance.extract()
 
-    input_file = os.path.join(config_dict['download_dir'], 'raw_addresses.csv')
-    output_file = os.path.join(config_dict['download_dir'], 'new_addresses.csv')
-    validate_file_path(input_file)
+    input_file = os.path.join(config_dict.get('download_dir', ''), 'raw_addresses.csv')
+    output_file = os.path.join(config_dict.get('download_dir', ''), 'new_addresses.csv')
 
     etl_instance.transform(input_file, output_file)
-    load_table_to_feature_class(config_dict)
+    load(config_dict)
+    logging.debug("Exiting process method")
 
 def etl():
     logging.info("Starting West Nile Virus Simulation")
@@ -65,80 +55,110 @@ def etl():
     process(config_dict)
     logging.debug("Exiting etl method")
 
-
-def setup_environment():
-    """Initializes the project environment."""
+def setup():
+    logging.debug("Entering setup method")
     with open('config/wnvoutbreak.yaml') as f:
-        config_dict = yaml.safe_load(f)
+        config_dict = yaml.load(f, Loader=yaml.FullLoader)
 
-    workspace = os.path.join(config_dict['proj_dir'], 'WestNileOutbreak.gdb')
-    arcpy.env.workspace = workspace
+    arcpy.env.workspace = os.path.join(config_dict.get('proj_dir'), 'WestNileOutbreak.gdb')
     arcpy.env.overwriteOutput = True
+    logging.info(f"Workspace set to: {arcpy.env.workspace}")
+    logging.info("Feature classes available in workspace: %s", arcpy.ListFeatureClasses())
 
-    os.makedirs(config_dict['output_folder'], exist_ok=True)
-    config_dict['output_folder'] = config_dict['output_folder']
-
+    output_folder = config_dict.get('output_folder', r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output")
+    os.makedirs(output_folder, exist_ok=True)
+    config_dict['output_folder'] = output_folder
     setup_logging(config_dict)
-    logging.info(f"Workspace set to {workspace}")
+    logging.debug("Exiting setup method")
     return config_dict
 
+def SpatialReference():
+    # Get the list of spatial references
+    srs = arcpy.ListSpatialReferences("*utm/north america*")
 
-def buffer_layer(layer_name, buffer_distance, config_dict):
-    """Creates a buffer for the given layer."""
-    output_path = os.path.join(config_dict['output_folder'], f"buf_{layer_name}.shp")
+    # Create a SpatialReference object for each one and print the central meridian
+    for sr_string in srs:
+        sr_object = arcpy.SpatialReference(sr_string)
+        print("{0.centralMeridian} {0.name} {0.PCSCode}".format(sr_object))
+
+    aprx = arcpy.mp.ArcGISProject("CURRENT")
+    map_doc = aprx.listMaps()[0]
+    # https://www.spatialreference.org/ref/esri/3743/ UTM13
+    utm_zone_13 = arcpy.SpatialReference(3743)
+    map_doc.spatialReference = utm_zone_13
+
+def buffer(layer_name, buf_dist, config_dict):
+    output_buffer_layer_path = os.path.join(config_dict.get('output_folder'), f"buf_{layer_name}.shp")
     if arcpy.Exists(layer_name):
-        arcpy.analysis.Buffer(layer_name, output_path, buffer_distance)
-        logging.info(f"Buffered layer '{layer_name}' with distance {buffer_distance}.")
-        return output_path
+        print(f"Buffering {layer_name} at {buf_dist} to generate {output_buffer_layer_path}")
+        arcpy.analysis.Buffer(layer_name, output_buffer_layer_path, buf_dist, "FULL", "ROUND", "ALL")
+        return output_buffer_layer_path
     else:
-        logging.error(f"Layer '{layer_name}' does not exist.")
-        raise RuntimeError(f"Layer '{layer_name}' not found.")
+        raise FileNotFoundError(f"Input Features '{layer_name}' do not exist.")
 
 
-def perform_intersect(layers, config_dict):
-    """Performs an intersect operation."""
-    output_intersect_path = os.path.join(config_dict['output_folder'], "intersect.shp")
-    arcpy.analysis.Intersect(layers, output_intersect_path)
-    logging.info(f"Intersect operation completed. Output: {output_intersect_path}")
-    return output_intersect_path
+def intersect(buffer_layer_list, config_dict):
+    lyr_intersect = input("Enter the name for the intersect output layer name: ")
+    lyr_intersect_path = os.path.join(config_dict.get('gdb_path'), lyr_intersect)
+
+    print(f"Intersecting {buffer_layer_list} to generate {lyr_intersect_path}")
+    arcpy.analysis.Intersect(
+        in_features=buffer_layer_list,
+        out_feature_class=lyr_intersect_path,
+        join_attributes="ALL",
+        cluster_tolerance=None,
+        output_type="INPUT"
+    )
+    return lyr_intersect_path
 
 
-def erase_features(target_layer, erase_layer, config_dict):
-    """Erases features from the target layer."""
-    erased_output_path = os.path.join(config_dict['output_folder'], "erased_output.shp")
-    arcpy.analysis.Erase(target_layer, erase_layer, erased_output_path)
+def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
+    try:
+        for layer in [intersect_layer, avoid_points_buffer_layer]:
+            arcpy.management.RepairGeometry(layer, "DELETE_NULL")
+            if int(arcpy.management.GetCount(layer)[0]) == 0:
+                raise ValueError(f"Layer {layer} is empty or invalid after geometry repair.")
 
-    if arcpy.Exists(erased_output_path):
-        logging.info(f"Erase operation successful. Output: {erased_output_path}")
-    else:
-        logging.error("Erase operation failed.")
-        raise RuntimeError("Failed to erase features.")
-    return erased_output_path
+        # Optionally dissolve to avoid geometry problems
+        dissolved_intersect = os.path.join(config_dict.get('gdb_path'), "Dissolved_Intersect")
+        dissolved_avoid = os.path.join(config_dict.get('gdb_path'), "Dissolved_Avoid")
+        arcpy.management.Dissolve(intersect_layer, dissolved_intersect)
+        arcpy.management.Dissolve(avoid_points_buffer_layer, dissolved_avoid)
+
+        erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Erased_Intersect")
+        print(f"Erasing {dissolved_avoid} from {dissolved_intersect} to generate {erased_layer_path}")
+
+        arcpy.analysis.Erase(
+            in_features=dissolved_intersect,
+            erase_features=dissolved_avoid,
+            out_feature_class=erased_layer_path
+        )
+
+        if arcpy.Exists(erased_layer_path):
+            return erased_layer_path
+        else:
+            raise arcpy.ExecuteError("Failed to create erased layer")
+
+    except arcpy.ExecuteError as e:
+        print(f"Error in erase operation: {str(e)}")
+        print(arcpy.GetMessages())
+        raise
+    except Exception as e:
+        print(f"Unexpected error in erase operation: {str(e)}")
+        raise
 
 
-def apply_spatial_join_and_query(boulder_addresses, final_analysis, config_dict):
-    """Perform spatial join and apply definition query."""
-    # Define the output layer
-    target_addresses = os.path.join(config_dict.get('gdb_path'), "Target_Addresses")
-
-    # Spatial Join
+def spatial_join(Building_Addresses, lyr_intersect, config_dict):
+    join_layer_path = os.path.join(config_dict.get('gdb_path'), "Address_Join_Intersect")
+    print(f"Performing spatial join with {Building_Addresses} as target and {lyr_intersect} as join feature.")
     arcpy.analysis.SpatialJoin(
-        target_features=boulder_addresses,
-        join_features=final_analysis,
-        out_feature_class=target_addresses,
+        target_features=Building_Addresses,
+        join_features=lyr_intersect,
+        out_feature_class=join_layer_path,
         join_type="KEEP_COMMON",
         match_option="INTERSECT",
     )
-    print(f"Spatial join completed. Target addresses output: {target_addresses}")
-
-    # Apply Definition Query
-    arcpy.management.MakeFeatureLayer(target_addresses, "TargetAddressesLayer")
-    arcpy.management.SelectLayerByAttribute(
-        "TargetAddressesLayer", "NEW_SELECTION", "Join_Count = 1"
-    )
-    print("Definition query applied to filter target addresses.")
-
-    return target_addresses
+    return join_layer_path
 
 
 def count_addresses(join_layer_path):
@@ -157,47 +177,10 @@ def add_to_project(new_layer_path):
     aprx.save()
     print("Project saved.")
 
-def set_spatial_reference(config_dict):
-    """Set the SpatialReference for the map document."""
-    spatial_ref = arcpy.SpatialReference(102653)  # NAD 1983 StatePlane Colorado North
-    arcpy.env.outputCoordinateSystem = spatial_ref
-    print(f"Spatial reference set to: {spatial_ref.name}")
-
-
-def apply_simple_renderer(layer_name):
-    """Apply a simple renderer to the 'final_analysis' layer."""
-    if arcpy.Exists(layer_name):
-        arcpy.management.ApplySymbologyFromLayer(
-            layer_name, symbology_layer=r"path_to_symbology.lyr"
-        )
-        print(f"Renderer applied to {layer_name} with 50% transparency.")
-    else:
-        raise FileNotFoundError(f"Layer {layer_name} does not exist.")
-
-
-def apply_definition_query(target_layer, join_layer, output_layer):
-    """Perform a spatial join and apply a definition query."""
-    # Spatial Join
-    arcpy.analysis.SpatialJoin(
-        target_features=target_layer,
-        join_features=join_layer,
-        out_feature_class=output_layer,
-        join_type="KEEP_COMMON",
-        match_option="INTERSECT",
-    )
-    print(f"Spatial join completed. Output layer: {output_layer}")
-
-    # Apply Definition Query
-    layer_view = arcpy.management.MakeFeatureLayer(output_layer)
-    arcpy.management.SelectLayerByAttribute(
-        layer_view, "NEW_SELECTION", "Join_Count = 1"
-    )
-    print(f"Definition query applied to {output_layer}.")
-
 
 def exportMap(config_dict):
     """
-    Dynamically exports the map layout as a PDF with a custom subtitle.
+    Dynamically exports the map layout as a PDF with a custom subtitle and model run date.
     Args:
         config_dict (dict): Configuration dictionary containing paths and settings.
     """
@@ -208,14 +191,17 @@ def exportMap(config_dict):
         # Get the first layout in the project
         lyt = aprx.listLayouts()[0]
 
-        # Prompt the user for the sub-title of the output map
+        # Prompt the user for the subtitle of the output map
         subtitle = input("Enter the sub-title for the output map: ")
 
-        # Loop through the layout elements to find the title object and update it with the user subtitle
+        # Get the current date and time for the model run
+        model_run_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Loop through layout elements to find the title object and update it
         for el in lyt.listElements():
             print(el.name)  # Debugging to check element names
             if "Title" in el.name:  # Assumption: Title object includes 'Title' in its name
-                el.text = el.text + " " + subtitle  # Appending the subtitle
+                el.text = el.text + " " + subtitle + f"\nModel Run Date: {model_run_date}"
 
         # Export the layout to a PDF file
         output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
@@ -226,75 +212,66 @@ def exportMap(config_dict):
         print(f"An error occurred: {e}")
         raise e
 
-def process_buffer_layers(buffer_layer_list: List[str], config_dict: Dict) -> List[str]:
-    """Process buffer operations for the given layers.
-    
-    Args:
-        buffer_layer_list: List of layer names to buffer
-        config_dict: Configuration dictionary
-        
-    Returns:
-        List of processed buffer layer paths
-    """
-    buffered_layers = []
-    for layer_name in buffer_layer_list:
-        if not arcpy.Exists(layer_name):
-            print(f"Layer '{layer_name}' does not exist in the workspace.")
-            continue
-            
-        buffer_distance = get_validated_buffer_distance(layer_name)
-        buffered_layer = buffer_layer(layer_name, f"{buffer_distance} feet", config_dict)
-        buffered_layers.append(buffered_layer)
-    
-    return buffered_layers
+if __name__ == '__main__':
+    config_dict = setup()
+    arcpy.env.parallelProcessingFactor = "100%"  # Utilize all available cores
+    logging.info("Configuration loaded: %s", config_dict)
+    etl()
 
-def get_validated_buffer_distance(layer_name: str) -> str:
-    """Get and validate buffer distance input from user.
-    
-    Args:
-        layer_name: Name of the layer to get buffer distance for
-        
-    Returns:
-        Validated buffer distance value
-        
-    Raises:
-        ValueError: If invalid buffer distance is provided
-    """
-    buffer_distance = input(f"Enter the buffer distance in feet for {layer_name}: ").strip()
-    if not buffer_distance.replace(" ", "").replace("feet", "").isdigit():
-        raise ValueError(f"Invalid buffer distance: {buffer_distance}")
-    return buffer_distance
+    SpatialReference()
 
-def main():
-    """Main entry point for the script."""
-    config_dict = setup_environment()
-    arcpy.env.parallelProcessingFactor = PARALLEL_PROCESSING_FACTOR
+    buffer_layer_list = ["Mosquito_Larval_Sites", "Wetlands", "Lakes_and_Reservoirs", "OSMP_Properties"]
 
-    # ETL Processing
-    process_etl(config_dict)
-    print("ETL process completed.")
-
-    # Buffer Processing
-    buffered_layers = process_buffer_layers(BUFFER_LAYERS, config_dict)
+    for layer in buffer_layer_list:
+        if arcpy.Exists(layer):
+            input_distance = input("Enter the buffer distance in feet: ").strip()
+            if not input_distance.replace(" ", "").replace("feet", "").isdigit():
+                raise ValueError(f"Invalid buffer distance: {input_distance}")
+            buffer(layer, input_distance + " feet", config_dict)
+        else:
+            print(f"Layer '{layer}' does not exist in the workspace.")
     print("Buffering complete.")
     print(arcpy.GetMessages())
 
-    # Intersection and Erase Operations
-    print("Starting Intersection and Erase Operations.")
-    intersect_path = perform_intersect(buffered_layers, config_dict)
-    print("Intersect operation completed.")
-    
-    avoid_points_buffer = buffer_layer(
-        config_dict.get('avoid_points_name', 'Avoid_Points'),
-        AVOID_POINTS_BUFFER_DISTANCE,
-        config_dict
+    lyr_intersect_path = intersect([f"buf_{layer}" for layer in buffer_layer_list], config_dict)
+    print("Intersect complete.")
+    print(arcpy.GetMessages())
+
+    avoid_points_layer_name = config_dict.get('avoid_points_name', 'Avoid_Points')
+    avoid_points_buffer_layer = buffer(
+        layer_name=avoid_points_layer_name,
+        buf_dist=config_dict.get('avoid_buffer_distance', '100 feet'),
+        config_dict=config_dict
     )
-    print("Buffering avoid points complete.")
-    
-    erase_features(intersect_path, avoid_points_buffer, config_dict)
-    print("Erase operation completed.")
-    logging.info("Script execution completed successfully.")
+    print("Avoid_Points buffering complete.")
+    print(arcpy.GetMessages())
 
+    erased_layer_path = erase(lyr_intersect_path, avoid_points_buffer_layer, config_dict)
+    print(f"Erased layer created at: {erased_layer_path}")
 
-if __name__ == "__main__":
-    main()
+    print("All operations completed successfully.")
+    print(arcpy.GetMessages())
+
+    joined_layer_path = spatial_join("Building_Addresses", lyr_intersect_path, config_dict)
+    print("Spatial join complete.")
+    print(arcpy.GetMessages())
+
+    print("Counting addresses within the intersect layer...")
+    address_count = count_addresses(joined_layer_path)
+    if address_count == 0:
+        print("No addresses found within the intersect layer.")
+    else:
+        print(f"Found {address_count} addresses within the intersect layer.")
+    print(f"Number of addresses within the intersect layer: {address_count}")
+    print(arcpy.GetMessages())
+
+    print("Adding joined layer to the project...")
+    add_to_project(joined_layer_path)
+
+    print("Exporting map...")
+    exportMap(config_dict)
+    print(f"Map Exported to {config_dict.get('output_folder')}")
+    print(arcpy.GetMessages())
+
+    print("All operations completed successfully.")
+    print(arcpy.GetMessages())
