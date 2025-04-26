@@ -6,13 +6,16 @@ import sys
 from etl.GSheetsEtl import GSheetsEtl
 from datetime import datetime
 
+
 # Set up logging
 def setup_logging(config_dict):
+    log_path = os.path.join(config_dict.get('proj_dir'), "wnv.log")
     logging.basicConfig(
-        filename=f"{config_dict.get('proj_dir')}wnv.log",
+        filename=log_path,
         filemode="w",
         level=logging.DEBUG
     )
+
 
 def load(config_dict):
     logging.debug("Entering load method")
@@ -36,6 +39,7 @@ def load(config_dict):
         raise FileNotFoundError(f"Failed to create feature class '{out_feature_class}'.")
     logging.debug("Exiting load method")
 
+
 def process(config_dict):
     logging.debug("Entering process method")
     etl_instance = GSheetsEtl(config_dict)
@@ -48,6 +52,7 @@ def process(config_dict):
     load(config_dict)
     logging.debug("Exiting process method")
 
+
 def etl():
     logging.info("Starting West Nile Virus Simulation")
     logging.debug("Entering etl method")
@@ -55,22 +60,27 @@ def etl():
     process(config_dict)
     logging.debug("Exiting etl method")
 
+
 def setup():
     logging.debug("Entering setup method")
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
 
+    # Set workspace and store it in config_dict as gdb_path
     arcpy.env.workspace = os.path.join(config_dict.get('proj_dir'), 'WestNileOutbreak.gdb')
+    config_dict['gdb_path'] = arcpy.env.workspace
     arcpy.env.overwriteOutput = True
     logging.info(f"Workspace set to: {arcpy.env.workspace}")
     logging.info("Feature classes available in workspace: %s", arcpy.ListFeatureClasses())
 
-    output_folder = config_dict.get('output_folder', r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output")
+    output_folder = config_dict.get('output_folder',
+                                    r"C:\Users\Owner\Documents\GIS Programming\westnileoutbreak\Output")
     os.makedirs(output_folder, exist_ok=True)
     config_dict['output_folder'] = output_folder
     setup_logging(config_dict)
     logging.debug("Exiting setup method")
     return config_dict
+
 
 def SpatialReference():
     # Get the list of spatial references
@@ -86,6 +96,7 @@ def SpatialReference():
     # https://www.spatialreference.org/ref/esri/3743/ UTM13
     utm_zone_13 = arcpy.SpatialReference(3743)
     map_doc.spatialReference = utm_zone_13
+
 
 def buffer(layer_name, buf_dist, config_dict):
     output_buffer_layer_path = os.path.join(config_dict.get('output_folder'), f"buf_{layer_name}.shp")
@@ -116,7 +127,7 @@ def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
     try:
         for layer in [intersect_layer, avoid_points_buffer_layer]:
             arcpy.management.RepairGeometry(layer, "DELETE_NULL")
-            if int(arcpy.management.GetCount(layer)[0]) == 0:
+            if int(arcpy.management.GetCount(layer).getOutput(0)) == 0:
                 raise ValueError(f"Layer {layer} is empty or invalid after geometry repair.")
 
         # Optionally dissolve to avoid geometry problems
@@ -149,7 +160,7 @@ def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
 
 
 def spatial_join(Building_Addresses, lyr_intersect, config_dict):
-    join_layer_path = os.path.join(config_dict.get('gdb_path'), "Address_Join_Intersect")
+    join_layer_path = os.path.join(config_dict.get('gdb_path'), "Target_Addresses")
     print(f"Performing spatial join with {Building_Addresses} as target and {lyr_intersect} as join feature.")
     arcpy.analysis.SpatialJoin(
         target_features=Building_Addresses,
@@ -167,15 +178,95 @@ def count_addresses(join_layer_path):
     print(f"The number of addresses that fall within the intersect layer is: {count}")
     return count
 
+def rendering_definition_query():
+    aprx = arcpy.mp.ArcGISProject("CURRENT")
+    map_doc = aprx.listMaps()[0]
 
-def add_to_project(new_layer_path):
-    proj_path = config_dict.get('proj_path')
+    # Applying a definition query to 'Target_Addresses'
+    target_layer = map_doc.listLayers("Target_Addresses")[0]
+    target_layer.definitionQuery = "Join_Count = 1"
+    print("Definition query applied. Only addresses within analysis zones are displayed.")
+
+    # Optional: Count addresses impacted by pesticide spraying
+    count_result = arcpy.management.GetCount("Target_Addresses")
+    total_impacted_addresses = int(count_result.getOutput(0))
+    print(f"Total addresses impacted by pesticide spraying: {total_impacted_addresses}")
+
+
+def count_avoided_addresses(address_layer, hazard_layer):
+    """
+    Counts the number of addresses that are outside of hazard zones using ArcPy.
+
+    Args:
+        address_layer (str): Layer name or path containing all address points
+        hazard_layer (str): Layer name or path containing hazard zone polygons
+
+    Returns:
+        int: Number of addresses that are outside of hazard zones
+    """
+    try:
+        # Make a layer of addresses that don't intersect with hazard zones
+        non_hazard_addresses = "non_hazard_addresses"
+        arcpy.MakeFeatureLayer_management(address_layer, non_hazard_addresses)
+        arcpy.SelectLayerByLocation_management(
+            non_hazard_addresses,
+            "INTERSECT",
+            hazard_layer,
+            selection_type="NEW_SELECTION",
+            invert_spatial_relationship=True
+        )
+
+        # Get the count of selected features
+        result = arcpy.GetCount_management(non_hazard_addresses)
+        count = int(result.getOutput(0))
+
+        return count
+
+    except arcpy.ExecuteError:
+        print(f"ArcPy error: {arcpy.GetMessages()}")
+        raise
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise
+
+
+def add_to_project(new_layer_path, config_dict):
+    proj_path = config_dict.get('proj_path') or os.path.join(config_dict.get('proj_dir'), "WestNileOutbreak.aprx")
     aprx = arcpy.mp.ArcGISProject(proj_path)
     map_doc = aprx.listMaps()[0]
     map_doc.addDataFromPath(new_layer_path)
     print(f"Added {new_layer_path} to the project.")
     aprx.save()
     print("Project saved.")
+
+
+def rendering():
+    aprx = arcpy.mp.ArcGISProject("CURRENT")
+    map_doc = aprx.listMaps()[0]
+
+    # Adjust 'avoid_points_buf' to show semi-transparent light blue
+    avoid_points_buf_layer = map_doc.listLayers("avoid_points_buf")[0]
+    avoid_sym = avoid_points_buf_layer.symbology
+    avoid_sym.renderer.symbol.color = {'RGB': [173, 216, 230, 100]}  # Light blue with transparency
+    avoid_sym.renderer.symbol.outlineColor = {'RGB': [0, 0, 0, 100]}  # Black outline
+    avoid_points_buf_layer.symbology = avoid_sym
+    avoid_points_buf_layer.transparency = 50
+
+    # Adjust erased 'avoid_points_buf' areas to show semi-transparent red
+    erased_layer = map_doc.listLayers("erased_avoid_points_buf")[0]
+    erased_sym = erased_layer.symbology
+    erased_sym.renderer.symbol.color = {'RGB': [255, 0, 0, 100]}  # Red with transparency
+    erased_sym.renderer.symbol.outlineColor = {'RGB': [0, 0, 0, 100]}  # Black outline
+    erased_layer.symbology = erased_sym
+    erased_layer.transparency = 50
+
+    # Apply a simple renderer to 'final_analysis' with red polygon fill and black outline
+    final_analysis_layer = map_doc.listLayers("final_analysis")[0]
+    final_sym = final_analysis_layer.symbology
+    final_sym.renderer.symbol.color = {'RGB': [255, 0, 0, 100]}  # Red polygon fill
+    final_sym.renderer.symbol.outlineColor = {'RGB': [0, 0, 0, 100]}  # Black outline
+    final_analysis_layer.symbology = final_sym
+    final_analysis_layer.transparency = 50
 
 
 def exportMap(config_dict):
@@ -185,8 +276,8 @@ def exportMap(config_dict):
         config_dict (dict): Configuration dictionary containing paths and settings.
     """
     try:
-        # Get the project object
-        aprx = arcpy.mp.ArcGISProject(f"{config_dict.get('proj_dir')}WestNileOutbreak.aprx")
+        proj_path = os.path.join(config_dict.get('proj_dir'), "WestNileOutbreak.aprx")
+        aprx = arcpy.mp.ArcGISProject(proj_path)
 
         # Get the first layout in the project
         lyt = aprx.listLayouts()[0]
@@ -211,6 +302,7 @@ def exportMap(config_dict):
     except Exception as e:
         print(f"An error occurred: {e}")
         raise e
+
 
 if __name__ == '__main__':
     config_dict = setup()
@@ -248,13 +340,20 @@ if __name__ == '__main__':
 
     erased_layer_path = erase(lyr_intersect_path, avoid_points_buffer_layer, config_dict)
     print(f"Erased layer created at: {erased_layer_path}")
+    print(arcpy.GetMessages())
+    print("Counting addresses outside hazard zones...")
 
-    print("All operations completed successfully.")
+    # Count addresses that are outside the hazard zones
+    avoided_count = count_avoided_addresses("Building_Addresses", erased_layer_path)
+    print(f"Number of addresses outside hazard zones: {avoided_count}")
     print(arcpy.GetMessages())
 
     joined_layer_path = spatial_join("Building_Addresses", lyr_intersect_path, config_dict)
     print("Spatial join complete.")
     print(arcpy.GetMessages())
+
+    # Rendering with Definition Query
+    rendering_definition_query()
 
     print("Counting addresses within the intersect layer...")
     address_count = count_addresses(joined_layer_path)
@@ -266,7 +365,12 @@ if __name__ == '__main__':
     print(arcpy.GetMessages())
 
     print("Adding joined layer to the project...")
-    add_to_project(joined_layer_path)
+    add_to_project(joined_layer_path, config_dict)
+    print(arcpy.GetMessages())
+
+    print("Rendering map...")
+    rendering()
+    print(arcpy.GetMessages())
 
     print("Exporting map...")
     exportMap(config_dict)
