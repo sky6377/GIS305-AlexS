@@ -165,30 +165,65 @@ def add_to_project(new_layer_path):
 
 def exportMap(config_dict):
     """
-    Dynamically exports the map layout as a PDF with a custom subtitle and model run date.
-    Args:
-        config_dict (dict): Configuration dictionary containing paths and settings.
+    Exports the 'Lab3Layout' layout as a PDF with a clean legend, updated title/subtitle, dynamic run date, and centered/zoomed map.
     """
     try:
-        # Get the project object
+        # Load project and layout
         aprx = arcpy.mp.ArcGISProject(f"{config_dict.get('proj_dir')}WestNileOutbreak.aprx")
 
-        # Get the first layout in the project
-        lyt = aprx.listLayouts()[0]
+        # Find the specific layout named 'Lab3Layout'
+        lyt = None
+        for layout in aprx.listLayouts():
+            if layout.name == "Lab3Layout":
+                lyt = layout
+                break
 
-        # Prompt the user for the subtitle of the output map
+        if lyt is None:
+            raise ValueError("Layout 'Lab3Layout' not found in the project.")
+
+        # Get subtitle from user
         subtitle = input("Enter the sub-title for the output map: ")
 
-        # Get the current date and time for the model run
+        # Current date and time
         model_run_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Loop through layout elements to find the title object and update it
-        for el in lyt.listElements():
-            print(el.name)  # Debugging to check element names
-            if "Title" in el.name:  # Assumption: Title object includes 'Title' in its name
-                el.text = el.text + " " + subtitle + f"\nModel Run Date: {model_run_date}"
+        # Update Title and Date elements
+        for el in lyt.listElements("TEXT_ELEMENT"):
+            if el.name == "Main Title":
+                el.text = f"West Nile Virus Risk Map\n{subtitle}"  # Title and Subtitle combined
+            if el.name == "Run Date":
+                el.text = f"Model Run Date: {model_run_date}"
 
-        # Export the layout to a PDF file
+        # Update the Legend and enforce the order
+        target_layers = ["Boulder_addresses", "Wetlands", "OSMP_Properties", "Mosquito_larval_Sites",
+                         "Lakes_and_Reservoirs"]
+
+        # Find the Legend element
+        for legend in lyt.listElements("LEGEND_ELEMENT"):
+            legend.listLegendItemLayers = []  # Clear all existing legend items
+            map_frame = legend.mapFrame
+            # Get a dictionary of all available layers
+            available_layers = {lyr.name: lyr for lyr in map_frame.map.listLayers()}
+            # Add layers back in the exact requested order
+            for layer_name in target_layers:
+                if layer_name in available_layers:
+                    legend.listLegendItemLayers.append(available_layers[layer_name])
+
+        # Fix the Map Extent (zoom to combined extent of target layers)
+        extent = None
+        for lyr in map_frame.map.listLayers():
+            if lyr.name in target_layers and lyr.isFeatureLayer:
+                desc = arcpy.Describe(lyr)
+                if hasattr(desc, 'extent') and desc.extent:
+                    if extent is None:
+                        extent = desc.extent
+                    else:
+                        extent = extent.union(desc.extent)
+
+        if extent:
+            map_frame.camera.setExtent(extent)
+
+        # Export to PDF
         output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
         lyt.exportToPDF(output_path)
         print(f"Map exported successfully to {output_path}")
@@ -196,6 +231,7 @@ def exportMap(config_dict):
     except Exception as e:
         print(f"An error occurred: {e}")
         raise e
+
 
 if __name__ == '__main__':
     config_dict = setup()
@@ -238,6 +274,16 @@ if __name__ == '__main__':
     joined_layer_path = spatial_join("Building_Addresses", lyr_intersect_path, config_dict)
     print("Spatial join complete.")
     print(arcpy.GetMessages())
+
+    # Rename the spatial join output to 'Boulder_addresses'
+    boulder_addresses_path = os.path.join(config_dict.get('gdb_path'), "Boulder_addresses")
+
+    if arcpy.Exists(joined_layer_path):
+        arcpy.management.CopyFeatures(joined_layer_path, boulder_addresses_path)
+        print(f"Created Boulder_addresses layer at {boulder_addresses_path}")
+    else:
+        raise FileNotFoundError("Spatial join output not found to create Boulder_addresses layer.")
+
 
     print("Counting addresses within the intersect layer...")
     address_count = count_addresses(joined_layer_path)
