@@ -165,9 +165,14 @@ def add_to_project(new_layer_path):
 
 def exportMap(config_dict):
     """
-    Exports the 'Lab3Layout' layout as a PDF with a clean legend, updated title/subtitle, dynamic run date, and centered/zoomed map.
+    Exports the 'Lab3Layout' layout as a PDF with a clean legend, updated title/subtitle, dynamic run date,
+    centered/zoomed map, and fixed scale for Boulder.
     """
     try:
+        import arcpy
+        import os
+        from datetime import datetime
+
         # Load project and layout
         aprx = arcpy.mp.ArcGISProject(f"{config_dict.get('proj_dir')}WestNileOutbreak.aprx")
 
@@ -217,14 +222,17 @@ def exportMap(config_dict):
                     if extent is None:
                         extent = desc.extent
                     else:
-                        # Merge extents manually
-                        extent.XMin = min(extent.XMin, desc.extent.XMin)
-                        extent.YMin = min(extent.YMin, desc.extent.YMin)
-                        extent.XMax = max(extent.XMax, desc.extent.XMax)
-                        extent.YMax = max(extent.YMax, desc.extent.YMax)
+                        # Correctly create a new combined extent
+                        extent = arcpy.Extent(
+                            min(extent.XMin, desc.extent.XMin),
+                            min(extent.YMin, desc.extent.YMin),
+                            max(extent.XMax, desc.extent.XMax),
+                            max(extent.YMax, desc.extent.YMax)
+                        )
 
         if extent:
             map_frame.camera.setExtent(extent)
+            map_frame.camera.scale = 85000  # Set fixed scale for Boulder area
 
         # Export to PDF
         output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
@@ -234,6 +242,7 @@ def exportMap(config_dict):
     except Exception as e:
         print(f"An error occurred: {e}")
         raise e
+
 
 
 if __name__ == '__main__':
