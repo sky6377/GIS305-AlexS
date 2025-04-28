@@ -195,8 +195,7 @@ def exportMap(config_dict):
                 el.text = f"Model Run Date: {model_run_date}"
 
         # Update the Legend and enforce the order
-        target_layers = ["Boulder_addresses", "Wetlands", "OSMP_Properties", "Mosquito_larval_Sites",
-                         "Lakes_and_Reservoirs"]
+        target_layers = ["Boulder_addresses", "Wetlands", "OSMP_Properties", "Mosquito_larval_Sites", "Lakes_and_Reservoirs"]
 
         # Find the Legend element
         for legend in lyt.listElements("LEGEND_ELEMENT"):
@@ -218,7 +217,11 @@ def exportMap(config_dict):
                     if extent is None:
                         extent = desc.extent
                     else:
-                        extent = extent.union(desc.extent)
+                        # Merge extents manually
+                        extent.XMin = min(extent.XMin, desc.extent.XMin)
+                        extent.YMin = min(extent.YMin, desc.extent.YMin)
+                        extent.XMax = max(extent.XMax, desc.extent.XMax)
+                        extent.YMax = max(extent.YMax, desc.extent.YMax)
 
         if extent:
             map_frame.camera.setExtent(extent)
