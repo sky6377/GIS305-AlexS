@@ -23,27 +23,39 @@ class GSheetsEtl(SpatialEtl):
         print(f"Data extracted to {extract_path}")
 
     def transform(self, input_file, output_file):
-        print("Transforming data by adding City, State")
+        print("Transforming data using Nominatim OpenStreetMap Geocoder")
         with open(output_file, "w", encoding='utf-8') as transformed_file:
             transformed_file.write("X,Y,Type\n")
             with open(input_file, "r", encoding='utf-8') as partial_file:
                 csv_dict = csv.DictReader(partial_file, delimiter=',')
                 for row in csv_dict:
-                    address = row["Street Address"] + f" {self.config_dict.get('city', 'Boulder')} {self.config_dict.get('state', 'CO')}"
+                    address = row[
+                                  "Street Address"] + f" {self.config_dict.get('city', 'Boulder')} {self.config_dict.get('state', 'CO')}"
                     print(f"Geocoding address: {address}")
-                    geocode_url = (
-                        f"{self.config_dict.get('geocode_base_url', 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress')}"
-                        f"?address={address}&benchmark={self.config_dict.get('geocode_benchmark', '2020')}&format=json"
-                    )
-                    r = requests.get(geocode_url)
-                    resp_dict = r.json()
 
-                    if resp_dict['result']['addressMatches']:
-                        x = resp_dict['result']['addressMatches'][0]['coordinates']['x']
-                        y = resp_dict['result']['addressMatches'][0]['coordinates']['y']
-                        transformed_file.write(f"{x},{y},Residential\n")
-                    else:
-                        print(f"No matches found for address: {address}")
+                    geocode_url = "https://nominatim.openstreetmap.org/search"
+                    params = {
+                        'q': address,
+                        'format': 'json',
+                        'limit': 1
+                    }
+                    headers = {
+                        'User-Agent': 'GIS305-FinalProject-Geocoder'  # Nominatim requires a User-Agent
+                    }
+
+                    try:
+                        r = requests.get(geocode_url, params=params, headers=headers, timeout=10)
+                        r.raise_for_status()
+                        results = r.json()
+
+                        if results:
+                            lon = results[0]['lon']
+                            lat = results[0]['lat']
+                            transformed_file.write(f"{lon},{lat},Residential\n")
+                        else:
+                            print(f"No matches found for address: {address}")
+                    except Exception as e:
+                        print(f"Geocoding failed for address '{address}': {e}")
 
         print(f"Transformation complete. Data written to {output_file}")
 
