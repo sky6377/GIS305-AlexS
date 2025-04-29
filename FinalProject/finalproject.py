@@ -2,9 +2,9 @@ import yaml
 import arcpy
 import os
 import logging
-from etl.GSheetsEtl import GSheetsEtl
-from datetime import datetime
 import time
+from datetime import datetime
+from etl.GSheetsEtl import GSheetsEtl
 
 # --- Setup Functions ---
 
@@ -46,7 +46,6 @@ def setup():
 
 def load(config_dict):
     logging.debug("Entering load method")
-    print("Loading data into feature class...")
     in_table = os.path.join(config_dict.get('download_dir'), 'new_addresses.csv')
     if not os.path.exists(in_table):
         raise FileNotFoundError(f"Input table '{in_table}' does not exist.")
@@ -60,8 +59,6 @@ def load(config_dict):
 
     if not arcpy.Exists(out_feature_class):
         raise FileNotFoundError(f"Failed to create feature class '{out_feature_class}'.")
-
-    print(f"Load complete: {out_feature_class}")
     logging.debug("Exiting load method")
 
 def process(config_dict):
@@ -104,67 +101,81 @@ def intersect(buffer_layer_list, config_dict):
     run_tool(arcpy.analysis.Intersect, buffer_layer_list, lyr_intersect_path, "ALL")
     return lyr_intersect_path
 
+def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
+    try:
+        for layer in [intersect_layer, avoid_points_buffer_layer]:
+            arcpy.management.RepairGeometry(layer, "DELETE_NULL")
+            if int(arcpy.management.GetCount(layer)[0]) == 0:
+                raise ValueError(f"Layer {layer} is empty or invalid after geometry repair.")
+
+        dissolved_intersect = os.path.join(config_dict.get('gdb_path'), "Dissolved_Intersect")
+        dissolved_avoid = os.path.join(config_dict.get('gdb_path'), "Dissolved_Avoid")
+        arcpy.management.Dissolve(intersect_layer, dissolved_intersect)
+        arcpy.management.Dissolve(avoid_points_buffer_layer, dissolved_avoid)
+
+        erased_layer_path = os.path.join(config_dict.get('gdb_path'), "Final_Analysis")
+        run_tool(arcpy.analysis.Erase, dissolved_intersect, dissolved_avoid, erased_layer_path)
+
+        if not arcpy.Exists(erased_layer_path):
+            raise FileNotFoundError("Failed to create erased layer.")
+        return erased_layer_path
+    except Exception as e:
+        print(f"Error in erase: {e}")
+        raise e
+
+def spatial_join(target_layer, join_layer, config_dict):
+    join_layer_path = os.path.join(config_dict.get('gdb_path'), "Target_Addresses")
+    run_tool(arcpy.analysis.SpatialJoin,
+             target_features=target_layer,
+             join_features=join_layer,
+             out_feature_class=join_layer_path,
+             join_type="KEEP_COMMON",
+             match_option="INTERSECT")
+    return join_layer_path
+
+def add_to_project(new_layer_path, config_dict):
+    aprx = arcpy.mp.ArcGISProject(os.path.join(config_dict.get('proj_dir'), "WestNileOutbreak.aprx"))
+    map_doc = aprx.listMaps()[0]
+    map_doc.addDataFromPath(new_layer_path)
+    aprx.save()
+    print(f"Added {new_layer_path} to project.")
+
 def export_map(config_dict):
     try:
         print("Starting export_map...")
-        start = time.time()
-
         aprx = arcpy.mp.ArcGISProject(os.path.join(config_dict.get('proj_dir'), "WestNileOutbreak.aprx"))
+
         lyt_list = aprx.listLayouts("FinalProjectLayout")
         if not lyt_list:
-            raise ValueError("Layout 'FinalProjectLayout' not found in the project.")
+            raise ValueError("Layout 'FinalProjectLayout' not found in project.")
         lyt = lyt_list[0]
 
-        map_doc = aprx.listMaps()[0]
-        target_layer = map_doc.listLayers("Target_Addresses")[0]
-        extent = target_layer.getExtent()
         map_frame = lyt.listElements("MAPFRAME_ELEMENT")[0]
-        map_frame.camera.setExtent(extent)
-        print(f"Zoomed map to extent of Target_Addresses.")
+        map_frame.camera.scale = 49569
+        map_frame.camera.X = 3079059
+        map_frame.camera.Y = 1248932
 
-        desired_order = [
-            "Target_Addresses",
-            "Final_Analysis",
-            "Wetlands",
-            "OSMP_Properties",
-            "Mosquito_Larval_Sites",
-            "Lakes_and_Reservoirs"
-        ]
-
-        layer_list = {layer.name: layer for layer in map_doc.listLayers()}
-        for idx, layer_name in enumerate(reversed(desired_order)):
-            layer = layer_list.get(layer_name)
-            if layer:
-                map_doc.moveLayer(map_doc.listLayers()[0], layer)
-
-        for layer in map_doc.listLayers():
-            if layer.name in desired_order:
-                layer.visible = True
-            else:
-                layer.visible = False
-
-        print("Set legend layers and visibility.")
-
-        subtitle = input("Enter the sub-title for the output map: ")
+        subtitle = input("Enter subtitle for map: ")
         model_run_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         for el in lyt.listElements("TEXT_ELEMENT"):
             if el.name == "MainTitle":
-                el.text = f'West Nile Virus Outbreak Map : "{subtitle}"'
-                print(f"Updated MainTitle text:\n{el.text}\n")
+                el.text = f"West Nile Virus Outbreak Map : \"{subtitle}\""
             elif el.name == "ModelRunDate":
                 el.text = f"Model Run Date: {model_run_date}"
-                print(f"Updated ModelRunDate text:\n{el.text}\n")
 
-        output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
-        run_tool(lyt.exportToPDF, output_path)
+        desired_layers = ["Target_Addresses", "Final_Analysis", "Wetlands", "OSMP_Properties", "Mosquito_Larval_Sites", "Lakes_and_Reservoirs"]
 
-        duration = time.time() - start
-        print(f"Finished export_map in {duration:.2f} seconds.")
-        print(f"Map exported successfully to {output_path}")
+        map_doc = aprx.listMaps()[0]
+        for layer in map_doc.listLayers():
+            layer.visible = layer.name in desired_layers
+
+        output_pdf = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
+        run_tool(lyt.exportToPDF, output_pdf)
+        print(f"Map exported to {output_pdf}")
 
     except Exception as e:
-        print(f"An error occurred in export_map: {e}")
+        print(f"Error in export_map: {e}")
         raise e
 
 # --- Main ---
@@ -184,14 +195,26 @@ if __name__ == '__main__':
     print("\n=== Buffering Layers ===")
     for layer in buffer_layer_list:
         if arcpy.Exists(layer):
-            input_distance = input(f"Enter the buffer distance for {layer} in feet: ").strip()
+            input_distance = input(f"Enter buffer distance for {layer} in feet: ").strip()
             input_distance_clean = ''.join(c for c in input_distance if c.isdigit())
             if not input_distance_clean:
                 raise ValueError(f"Invalid buffer distance: {input_distance}")
             buffer(layer, input_distance_clean + " feet", config_dict)
 
     print("\n=== Intersecting Buffers ===")
-    lyr_intersect_path = intersect([f"buf_{layer}" for layer in buffer_layer_list], config_dict)
+    intersect_layer = intersect([f"buf_{layer}" for layer in buffer_layer_list], config_dict)
+
+    print("\n=== Buffering Avoid Points ===")
+    avoid_points_buffer = buffer(config_dict.get('avoid_points_name', 'avoid_points'), config_dict.get('avoid_buffer_distance', '100 feet'), config_dict)
+
+    print("\n=== Erasing Avoid Points ===")
+    erased_layer = erase(intersect_layer, avoid_points_buffer, config_dict)
+
+    print("\n=== Spatial Join ===")
+    target_addresses = spatial_join("Building_Addresses", intersect_layer, config_dict)
+
+    print("\n=== Adding Target Addresses to Project ===")
+    add_to_project(target_addresses, config_dict)
 
     print("\n=== Exporting Map ===")
     export_map(config_dict)
