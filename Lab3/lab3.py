@@ -165,14 +165,10 @@ def add_to_project(new_layer_path):
 
 def exportMap(config_dict):
     """
-    Exports the 'Lab3Layout' layout as a PDF with a clean legend, updated title/subtitle, dynamic run date,
-    centered/zoomed map, and fixed scale for Boulder.
+    Exports the 'Lab3Layout' layout as a PDF, with fixed center on Boulder, fixed scale,
+    dynamic title/subtitle, dynamic model run date, and cleaned legend.
     """
     try:
-        import arcpy
-        import os
-        from datetime import datetime
-
         # Load project and layout
         aprx = arcpy.mp.ArcGISProject(f"{config_dict.get('proj_dir')}WestNileOutbreak.aprx")
 
@@ -195,44 +191,28 @@ def exportMap(config_dict):
         # Update Title and Date elements
         for el in lyt.listElements("TEXT_ELEMENT"):
             if el.name == "Main Title":
-                el.text = f"West Nile Virus Risk Map\n{subtitle}"  # Title and Subtitle combined
+                el.text = f"West Nile Virus Risk Map\n{subtitle}"
             if el.name == "Run Date":
                 el.text = f"Model Run Date: {model_run_date}"
 
-        # Update the Legend and enforce the order
-        target_layers = ["Boulder_addresses", "Wetlands", "OSMP_Properties", "Mosquito_larval_Sites", "Lakes_and_Reservoirs"]
+        # Update the Legend with correct layers
+        target_layers = ["Boulder_addresses", "Wetlands", "OSMP_Properties", "Mosquito_larval_Sites",
+                         "Lakes_and_Reservoirs"]
 
-        # Find the Legend element
         for legend in lyt.listElements("LEGEND_ELEMENT"):
-            legend.listLegendItemLayers = []  # Clear all existing legend items
+            legend.listLegendItemLayers = []
             map_frame = legend.mapFrame
-            # Get a dictionary of all available layers
             available_layers = {lyr.name: lyr for lyr in map_frame.map.listLayers()}
-            # Add layers back in the exact requested order
             for layer_name in target_layers:
                 if layer_name in available_layers:
                     legend.listLegendItemLayers.append(available_layers[layer_name])
 
-        # Fix the Map Extent (zoom to combined extent of target layers)
-        extent = None
-        for lyr in map_frame.map.listLayers():
-            if lyr.name in target_layers and lyr.isFeatureLayer:
-                desc = arcpy.Describe(lyr)
-                if hasattr(desc, 'extent') and desc.extent:
-                    if extent is None:
-                        extent = desc.extent
-                    else:
-                        # Correctly create a new combined extent
-                        extent = arcpy.Extent(
-                            min(extent.XMin, desc.extent.XMin),
-                            min(extent.YMin, desc.extent.YMin),
-                            max(extent.XMax, desc.extent.XMax),
-                            max(extent.YMax, desc.extent.YMax)
-                        )
-
-        if extent:
-            map_frame.camera.setExtent(extent)
-            map_frame.camera.scale = 85000  # Set fixed scale for Boulder area
+        # Set fixed center and scale for Boulder
+        map_frame = lyt.listElements("MAPFRAME_ELEMENT")[0]
+        map_frame.camera.setMode('CENTER_AND_SCALE')  # Important!
+        map_frame.camera.scale = 49569  # or 24000, or any scale you want
+        map_frame.camera.X = 3079059    # Boulder X (US Survey Feet, NAD 1983 HARN StatePlane CO North)
+        map_frame.camera.Y = 1248932    # Boulder Y (US Survey Feet)
 
         # Export to PDF
         output_path = os.path.join(config_dict.get('output_folder'), "WestNileOutbreakMap.pdf")
@@ -242,7 +222,6 @@ def exportMap(config_dict):
     except Exception as e:
         print(f"An error occurred: {e}")
         raise e
-
 
 
 if __name__ == '__main__':
