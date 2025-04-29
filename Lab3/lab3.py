@@ -209,8 +209,7 @@ def exportMap(config_dict):
 
         # Set fixed center and scale for Boulder
         map_frame = lyt.listElements("MAPFRAME_ELEMENT")[0]
-        map_frame.camera.setMode('CENTER_AND_SCALE')  # Important!
-        map_frame.camera.scale = 49569  # or 24000, or any scale you want
+        map_frame.camera.scale = 49569  # desired map scale
         map_frame.camera.X = 3079059    # Boulder X (US Survey Feet, NAD 1983 HARN StatePlane CO North)
         map_frame.camera.Y = 1248932    # Boulder Y (US Survey Feet)
 
@@ -222,6 +221,7 @@ def exportMap(config_dict):
     except Exception as e:
         print(f"An error occurred: {e}")
         raise e
+
 
 
 if __name__ == '__main__':
