@@ -9,6 +9,12 @@ from etl.GSheetsEtl import GSheetsEtl
 # --- Setup Functions ---
 
 def setup_logging(config_dict):
+    """
+        Configures logging for the project to write messages to a log file.
+
+        Parameters:
+            config_dict (dict): Configuration dictionary with 'proj_dir' as a key.
+    """
     log_path = os.path.join(config_dict.get('proj_dir'), "wnv.log")
     logging.basicConfig(
         filename=log_path,
@@ -17,6 +23,17 @@ def setup_logging(config_dict):
     )
 
 def run_tool(tool_func, *args, **kwargs):
+    """
+        Wrapper for running ArcPy tools with timing and messaging.
+
+        Parameters:
+            tool_func (callable): ArcPy tool function.
+            *args: Positional arguments for the tool.
+            **kwargs: Keyword arguments for the tool.
+
+        Returns:
+            Result object returned by the ArcPy tool function.
+    """
     tool_name = tool_func.__name__
     print(f"Starting {tool_name}...")
     start = time.time()
@@ -29,6 +46,13 @@ def run_tool(tool_func, *args, **kwargs):
     return result
 
 def setup():
+    """
+       Initializes the project environment: reads config, sets workspace,
+       output folders, and logging.
+
+       Returns:
+           dict: Configuration dictionary loaded from YAML.
+    """
     logging.debug("Entering setup method")
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
@@ -80,6 +104,10 @@ def etl(config_dict):
 # --- GIS Functions ---
 
 def spatial_reference():
+    """
+    Sets the map document’s spatial reference to NAD 1983 StatePlane Colorado North (WKID 26953).
+    This is a specific coordinate system used for mapping in Colorado.
+    """
     aprx = arcpy.mp.ArcGISProject(r"C:\\Users\\Owner\\Documents\\GIS Programming\\westnileoutbreak\\WestNileOutbreak\\WestNileOutbreak.aprx")
     map_doc = aprx.listMaps()[0]
     colorado_north = arcpy.SpatialReference(26953)
@@ -88,6 +116,17 @@ def spatial_reference():
     print(f"Spatial reference set to: {colorado_north.name}")
 
 def buffer(layer_name, buf_dist, config_dict):
+    """
+    Applies buffer analysis to the given layer.
+
+    Parameters:
+       layer_name (str): Name of the input layer.
+       buf_dist (str): Distance to buffer (e.g., '100 feet').
+       config_dict (dict): Configuration dictionary.
+
+    Returns:
+       str: File path to the output buffered layer.
+    """
     output_buffer_layer_path = os.path.join(config_dict.get('output_folder'), f"buf_{layer_name}.shp")
     if arcpy.Exists(layer_name):
         run_tool(arcpy.analysis.Buffer, layer_name, output_buffer_layer_path, buf_dist, "FULL", "ROUND", "ALL")
@@ -96,12 +135,33 @@ def buffer(layer_name, buf_dist, config_dict):
         raise FileNotFoundError(f"Input Features '{layer_name}' do not exist.")
 
 def intersect(buffer_layer_list, config_dict):
+    """
+    Intersects a list of buffered layers.
+
+    Parameters:
+       buffer_layer_list (list of str): List of buffered layer names.
+       config_dict (dict): Configuration dictionary.
+
+    Returns:
+       str: Path to the intersected output feature.
+       """
     lyr_intersect = "Intersect"
     lyr_intersect_path = os.path.join(config_dict.get('gdb_path'), lyr_intersect)
     run_tool(arcpy.analysis.Intersect, buffer_layer_list, lyr_intersect_path, "ALL")
     return lyr_intersect_path
 
 def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
+    """
+    Erases avoid zones from intersected buffer zones.
+
+    Parameters:
+        intersect_layer (str): Path to intersected layer.
+        avoid_points_buffer_layer (str): Path to buffered avoid points.
+        config_dict (dict): Configuration dictionary.
+
+    Returns:
+        str: Path to final erased analysis layer.
+    """
     try:
         for layer in [intersect_layer, avoid_points_buffer_layer]:
             arcpy.management.RepairGeometry(layer, "DELETE_NULL")
@@ -124,6 +184,17 @@ def erase(intersect_layer, avoid_points_buffer_layer, config_dict):
         raise e
 
 def spatial_join(target_layer, join_layer, config_dict):
+    """
+    Performs spatial join between target and join layers.
+
+    Parameters:
+        target_layer (str): Name of the target feature layer.
+        join_layer (str): Name of the join feature layer.
+        config_dict (dict): Configuration dictionary.
+
+    Returns:
+        str: Path to the joined output feature class.
+    """
     join_layer_path = os.path.join(config_dict.get('gdb_path'), "Target_Addresses")
     run_tool(arcpy.analysis.SpatialJoin,
              target_features=target_layer,
@@ -134,6 +205,13 @@ def spatial_join(target_layer, join_layer, config_dict):
     return join_layer_path
 
 def add_to_project(new_layer_path, config_dict):
+    """
+    Adds the specified layer to the ArcGIS Pro project.
+
+    Parameters:
+        new_layer_path (str): Path to the layer to add.
+        config_dict (dict): Configuration dictionary.
+    """
     aprx = arcpy.mp.ArcGISProject(os.path.join(config_dict.get('proj_dir'), "WestNileOutbreak.aprx"))
     map_doc = aprx.listMaps()[0]
     map_doc.addDataFromPath(new_layer_path)
@@ -141,6 +219,13 @@ def add_to_project(new_layer_path, config_dict):
     print(f"Added {new_layer_path} to project.")
 
 def export_map(config_dict):
+    """
+    Exports the final layout map to a PDF with fixed scale and centered extent.
+    Also updates dynamic title and date text.
+
+    Parameters:
+       config_dict (dict): Configuration dictionary with paths and export info.
+   """
     try:
         print("Starting export_map...")
         aprx = arcpy.mp.ArcGISProject(os.path.join(config_dict.get('proj_dir'), "WestNileOutbreak.aprx"))

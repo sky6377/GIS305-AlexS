@@ -5,13 +5,15 @@ from Lab2.etl.SpatialEtl import SpatialEtl
 
 class GSheetsEtl(SpatialEtl):
     """
-    GSheetsEtl perfonrs on extract, transform, and load process using a URL to a
-    Google Forms spreadsheet. The spreadsheet must contain an address and zipcode
-    column.
+    GSheetsEtl perfonrs on extract, transform, and load process using a URL to a Google Forms spreadsheet. The
+    spreadsheet must contain an address and
+    zipcode column.
 
     Parameters:
-        confing_dict (dictionary): A dictionary containing a remote_url key to the
-        Google spreadsheet and web geocoding service.
+        confing_dict (dictionary): A dictionary containing a remote_url key to the Google spreadsheet and web
+        geocoding service.
+        Contains keys such as 'remote_url', 'download_dir', 'city', 'state', and
+        'gdb_path'
     """
     # A dictionary of configuration keys and values
     config_dict = None
@@ -22,6 +24,8 @@ class GSheetsEtl(SpatialEtl):
     def extract(self):
         """
         Extracting data from a Google sreadsheet and saves it to a local file.
+        Downloads data from a Google spreadsheet URL and saves it locally as 'raw_addresses.csv' in the download
+        directory.
         """
         print(GSheetsEtl.extract.__doc__)
         help(GSheetsEtl.extract)
@@ -38,7 +42,11 @@ class GSheetsEtl(SpatialEtl):
 
     def transform(self, input_file, output_file):
         """
-        Transforming data using Nominatim OpenStreetMap Geocoder.
+        Geocodes addresses from the input CSV using the Nominatim API and writes longitude, latitude, and type to the output CSV.
+
+        Parameters:
+            input_file (str): Path to the raw address CSV file.
+            output_file (str): Path to save the transformed geocoded CSV.
         """
         print("Transforming data using Nominatim OpenStreetMap Geocoder")
         print(GSheetsEtl.transform.__doc__)
@@ -80,7 +88,10 @@ class GSheetsEtl(SpatialEtl):
 
     def load(self, input_table):
         """
-        Loading transformed data into geospatial feature class.
+        Converts the geocoded CSV to a point feature class using XYTableToPoint.
+
+        Parameters:
+            input_table (str): Path to the transformed CSV file to be converted.
         """
         print(GSheetsEtl.load.__doc__)
         help(GSheetsEtl.load)
@@ -97,7 +108,8 @@ class GSheetsEtl(SpatialEtl):
 
     def process(self):
         """
-        Runs the full ETL process: extraction, transformation, and loading.
+        Executes the full ETL pipeline: extract → transform → load.
+        Uses configured paths for intermediate and final outputs.
         """
         print(GSheetsEtl.process.__doc__)
         help(GSheetsEtl.process)
