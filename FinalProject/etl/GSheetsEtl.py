@@ -4,6 +4,15 @@ import requests
 from Lab2.etl.SpatialEtl import SpatialEtl
 
 class GSheetsEtl(SpatialEtl):
+    """
+    GSheetsEtl perfonrs on extract, transform, and load process using a URL to a
+    Google Forms spreadsheet. The spreadsheet must contain an address and zipcode
+    column.
+
+    Parameters:
+        confing_dict (dictionary): A dictionary containing a remote_url key to the
+        Google spreadsheet and web geocoding service.
+    """
     # A dictionary of configuration keys and values
     config_dict = None
 
@@ -11,6 +20,11 @@ class GSheetsEtl(SpatialEtl):
         super().__init__(config_dict)
 
     def extract(self):
+        """
+        Extracting data from a Google sreadsheet and saves it to a local file.
+        """
+        print(GSheetsEtl.extract.__doc__)
+        help(GSheetsEtl.extract)
         print("Extracting addresses from Google Forms spreadsheet")
         r = requests.get(self.config_dict.get('remote_url'))
         r.encoding = "utf-8"
@@ -23,7 +37,12 @@ class GSheetsEtl(SpatialEtl):
         print(f"Data extracted to {extract_path}")
 
     def transform(self, input_file, output_file):
+        """
+        Transforming data using Nominatim OpenStreetMap Geocoder.
+        """
         print("Transforming data using Nominatim OpenStreetMap Geocoder")
+        print(GSheetsEtl.transform.__doc__)
+        help(GSheetsEtl.transform)
         with open(output_file, "w", encoding='utf-8') as transformed_file:
             transformed_file.write("X,Y,Type\n")
             with open(input_file, "r", encoding='utf-8') as partial_file:
@@ -60,6 +79,11 @@ class GSheetsEtl(SpatialEtl):
         print(f"Transformation complete. Data written to {output_file}")
 
     def load(self, input_table):
+        """
+        Loading transformed data into geospatial feature class.
+        """
+        print(GSheetsEtl.load.__doc__)
+        help(GSheetsEtl.load)
         print("Loading transformed data into geospatial feature class")
         arcpy.env.workspace = self.config_dict.get('gdb_path', r"C:\default\path\to\geodatabase.gdb")
         arcpy.env.overwriteOutput = True
@@ -72,6 +96,11 @@ class GSheetsEtl(SpatialEtl):
         print(f"Feature class '{out_feature_class}' created successfully.")
 
     def process(self):
+        """
+        Runs the full ETL process: extraction, transformation, and loading.
+        """
+        print(GSheetsEtl.process.__doc__)
+        help(GSheetsEtl.process)
         raw_csv = f"{self.config_dict.get('download_dir')}raw_addresses.csv"
         transformed_csv = f"{self.config_dict.get('download_dir')}new_addresses.csv"
 
