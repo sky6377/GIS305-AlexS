@@ -307,7 +307,7 @@ def generate_address_report(config_dict):
     try:
         print("Generating address report...")
         final_analysis = os.path.join(config_dict.get('gdb_path'), "Final_Analysis")
-        address_points = config_dict.get('avoid_points_name', 'avoid_points')
+        address_points = os.path.join(config_dict.get('gdb_path'), "Target_Addresses")
         output_fc = os.path.join(config_dict.get('gdb_path'), "Addresses_Within_Buffer")
 
         # Run spatial join
