@@ -140,9 +140,7 @@ def spatial_reference():
     try:
         aprx = arcpy.mp.ArcGISProject(
             r"C:\\Users\\Owner\\Documents\\GIS Programming\\westnileoutbreak\\WestNileOutbreak\\WestNileOutbreak.aprx")
-        # Set spatial reference
         map_doc = aprx.listMaps()[0]
-        # https://https://www.spatialreference.org/ref/epsg/26953/
         colorado_north = arcpy.SpatialReference(26953)
         map_doc.spatialReference = colorado_north
         aprx.save()
@@ -299,6 +297,41 @@ def export_map(config_dict):
         print(f"Error in export_map: {e}")
         raise e
 
+def generate_address_report(config_dict):
+    """
+    Generates a CSV report of street addresses that fall within the final_analysis area.
+
+    :param config_dict: Configuration dictionary containing project paths.
+    :return: None
+    """
+    try:
+        print("Generating address report...")
+        final_analysis = os.path.join(config_dict.get('gdb_path'), "Final_Analysis")
+        address_points = config_dict.get('avoid_points_name', 'avoid_points')
+        output_fc = os.path.join(config_dict.get('gdb_path'), "Addresses_Within_Buffer")
+
+        # Run spatial join
+        run_tool(arcpy.analysis.SpatialJoin,
+                 target_features=address_points,
+                 join_features=final_analysis,
+                 out_feature_class=output_fc,
+                 join_type="KEEP_COMMON",
+                 match_option="INTERSECT")
+
+        # Export to CSV
+        csv_path = os.path.join(config_dict.get('output_folder'), "addresses_within_final_analysis.csv")
+        fields = ["X", "Y", "Type"]
+        with open(csv_path, 'w') as f:
+            f.write(','.join(fields) + '\n')
+            with arcpy.da.SearchCursor(output_fc, fields) as cursor:
+                for row in cursor:
+                    f.write(','.join(map(str, row)) + '\n')
+
+        print(f"Report generated at: {csv_path}")
+
+    except Exception as e:
+        print(f"Error in generate_address_report: {e}")
+
 # --- Main ---
 
 if __name__ == '__main__':
@@ -341,3 +374,6 @@ if __name__ == '__main__':
     export_map(config_dict)
 
     print("\n=== All operations completed successfully! ===")
+
+    print("\n=== Generating Address Report ===")
+    generate_address_report(config_dict)
