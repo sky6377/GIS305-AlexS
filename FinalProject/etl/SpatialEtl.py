@@ -1,24 +1,27 @@
 class SpatialEtl:
     """
-        Base class for ETL (Extract, Transform, Load) operations involving spatial data.
+    Base class for ETL (Extract, Transform, Load) operations involving spatial data.
 
-        Attributes:
-            config_dict (dict): Configuration dictionary with keys for project paths and other runtime parameters.
-        """
+    :param config_dict: Configuration dictionary with project paths and parameters.
+    :return: None
+    """
 
     def __init__(self, config_dict):
         """
-               Initialize the SpatialEtl class with a configuration dictionary.
+        Initializes the SpatialEtl class.
 
-               Parameters:
-                   config_dict (dict): Dictionary containing runtime configurations.
-               """
+        :param config_dict: Dictionary containing runtime configuration.
+        :return: None
+        """
         self.config_dict = config_dict
 
     def extract(self):
         """
-                Stub method for data extraction to be overridden in subclasses.
-                Prints the source and destination paths based on config_dict.
-                """
-        print(f"Extracting data from {self.config_dict['remote_url']}"
-              f"to {self.config_dict['proj_dir']}")
+        Stub method for data extraction. Prints configuration info.
+
+        :return: None
+        """
+        try:
+            print(f"Extracting data from {self.config_dict['remote_url']} to {self.config_dict['proj_dir']}")
+        except Exception as e:
+            print(f"Error in SpatialEtl.extract: {e}")

@@ -69,51 +69,87 @@ def setup():
 # --- ETL Functions ---
 
 def load(config_dict):
-    logging.debug("Entering load method")
-    in_table = os.path.join(config_dict.get('download_dir'), 'new_addresses.csv')
-    if not os.path.exists(in_table):
-        raise FileNotFoundError(f"Input table '{in_table}' does not exist.")
-    out_feature_class = config_dict.get('avoid_points_name', 'avoid_points')
+    """
+       Converts the geocoded CSV into a point feature class.
 
-    if arcpy.Exists(out_feature_class):
-        print(f"Deleting existing {out_feature_class}...")
-        run_tool(arcpy.management.Delete, out_feature_class)
+       :param config_dict: Dictionary with paths and workspace settings.
+       :return: None
+       """
+    try:
+        logging.debug("Entering load method")
+        in_table = os.path.join(config_dict.get('download_dir'), 'new_addresses.csv')
+        if not os.path.exists(in_table):
+            raise FileNotFoundError(f"Input table '{in_table}' does not exist.")
 
-    run_tool(arcpy.management.XYTableToPoint, in_table, out_feature_class, "X", "Y")
+        out_feature_class = config_dict.get('avoid_points_name', 'avoid_points')
 
-    if not arcpy.Exists(out_feature_class):
-        raise FileNotFoundError(f"Failed to create feature class '{out_feature_class}'.")
-    logging.debug("Exiting load method")
+        if arcpy.Exists(out_feature_class):
+            print(f"Deleting existing {out_feature_class}...")
+            run_tool(arcpy.management.Delete, out_feature_class)
+
+        run_tool(arcpy.management.XYTableToPoint, in_table, out_feature_class, "X", "Y")
+
+        if not arcpy.Exists(out_feature_class):
+            raise FileNotFoundError(f"Failed to create feature class '{out_feature_class}'.")
+        logging.debug("Exiting load method")
+    except Exception as e:
+        print(f"Error in load: {e}")
 
 def process(config_dict):
-    logging.debug("Entering process method")
-    etl_instance = GSheetsEtl(config_dict)
-    etl_instance.extract()
-    input_file = os.path.join(config_dict.get('download_dir', ''), 'raw_addresses.csv')
-    output_file = os.path.join(config_dict.get('download_dir', ''), 'new_addresses.csv')
-    etl_instance.transform(input_file, output_file)
-    load(config_dict)
-    logging.debug("Exiting process method")
+    """
+        Executes the ETL pipeline: extract -> transform -> load.
 
-def etl(config_dict):
-    logging.info("Starting West Nile Virus Simulation")
-    logging.debug("Entering etl method")
-    process(config_dict)
-    logging.debug("Exiting etl method")
+        :param config_dict: Configuration dictionary.
+        :return: None
+        """
+    try:
+        logging.debug("Entering process method")
+        etl_instance = GSheetsEtl(config_dict)
+        etl_instance.extract()
+        input_file = os.path.join(config_dict.get('download_dir', ''), 'raw_addresses.csv')
+        output_file = os.path.join(config_dict.get('download_dir', ''), 'new_addresses.csv')
+        etl_instance.transform(input_file, output_file)
+        load(config_dict)
+        logging.debug("Exiting process method")
+    except Exception as e:
+        print(f"Error in process: {e}")
 
 # --- GIS Functions ---
+def etl(config_dict):
+    """
+    Main ETL orchestration.
+
+    :param config_dict: Configuration dictionary.
+    :return: None
+    """
+    try:
+        logging.info("Starting West Nile Virus Simulation")
+        logging.debug("Entering etl method")
+        process(config_dict)
+        logging.debug("Exiting etl method")
+    except Exception as e:
+        print(f"Error in etl: {e}")
 
 def spatial_reference():
     """
     Sets the map document’s spatial reference to NAD 1983 StatePlane Colorado North (WKID 26953).
     This is a specific coordinate system used for mapping in Colorado.
+    :param aprx: The ArcGIS Project object.
+    :return: None
     """
-    aprx = arcpy.mp.ArcGISProject(r"C:\\Users\\Owner\\Documents\\GIS Programming\\westnileoutbreak\\WestNileOutbreak\\WestNileOutbreak.aprx")
-    map_doc = aprx.listMaps()[0]
-    colorado_north = arcpy.SpatialReference(26953)
-    map_doc.spatialReference = colorado_north
-    aprx.save()
-    print(f"Spatial reference set to: {colorado_north.name}")
+    try:
+        aprx = arcpy.mp.ArcGISProject(
+            r"C:\\Users\\Owner\\Documents\\GIS Programming\\westnileoutbreak\\WestNileOutbreak\\WestNileOutbreak.aprx")
+        # Set spatial reference
+        map_doc = aprx.listMaps()[0]
+        # https://https://www.spatialreference.org/ref/epsg/26953/
+        colorado_north = arcpy.SpatialReference(26953)
+        map_doc.spatialReference = colorado_north
+        aprx.save()
+        print(f"Spatial reference set to: {colorado_north.name}")
+    except Exception as e:
+        print(f"Error in spatial_reference: {e}")
+
 
 def buffer(layer_name, buf_dist, config_dict):
     """
