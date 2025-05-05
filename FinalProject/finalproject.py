@@ -299,7 +299,8 @@ def export_map(config_dict):
 
 def generate_address_report(config_dict):
     """
-    Generates a CSV report of street addresses that fall within the final_analysis area.
+    Generates a CSV report of street addresses from Building_Addresses
+    that fall within the Final_Analysis area.
 
     :param config_dict: Configuration dictionary containing project paths.
     :return: None
@@ -307,22 +308,30 @@ def generate_address_report(config_dict):
     try:
         print("Generating address report...")
         final_analysis = os.path.join(config_dict.get('gdb_path'), "Final_Analysis")
-        address_points = os.path.join(config_dict.get('gdb_path'), "Target_Addresses")
         output_fc = os.path.join(config_dict.get('gdb_path'), "Addresses_Within_Buffer")
 
-        # Run spatial join
+        # Spatial join using Building_Addresses
         run_tool(arcpy.analysis.SpatialJoin,
-                 target_features=address_points,
+                 target_features="Building_Addresses",
                  join_features=final_analysis,
                  out_feature_class=output_fc,
                  join_type="KEEP_COMMON",
                  match_option="INTERSECT")
 
+        # Add and calculate X and Y fields if missing
+        existing_fields = [f.name for f in arcpy.ListFields(output_fc)]
+        if 'X' not in existing_fields:
+            arcpy.management.AddField(output_fc, "X", "DOUBLE")
+            arcpy.management.CalculateGeometryAttributes(output_fc, [["X", "POINT_X"]])
+        if 'Y' not in existing_fields:
+            arcpy.management.AddField(output_fc, "Y", "DOUBLE")
+            arcpy.management.CalculateGeometryAttributes(output_fc, [["Y", "POINT_Y"]])
+
         # Export to CSV
         csv_path = os.path.join(config_dict.get('output_folder'), "addresses_within_final_analysis.csv")
-        fields = ["X", "Y", "Type"]
+        fields = ["FULLADDR", "X", "Y"]
         with open(csv_path, 'w') as f:
-            f.write(','.join(fields) + '\n')
+            f.write("FULLADDR,X,Y\n")
             with arcpy.da.SearchCursor(output_fc, fields) as cursor:
                 for row in cursor:
                     f.write(','.join(map(str, row)) + '\n')
